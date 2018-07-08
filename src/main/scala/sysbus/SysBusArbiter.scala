@@ -1,10 +1,9 @@
 package systemoncat.sysbus
 
 import chisel3._
-import chisel3.{Input, Output}
 import chisel3.util.log2Up
 
-class SysBusArbiter(masters: Seq[SysBusMaster]) extends SysBusMaster{
+class SysBusArbiter(masters: Seq[SysBusMaster]) extends Module with SysBusMaster{
     // val io = IO(new Bundle{
     //     val dat_o = Output(UInt(32.W))
     //     val adr_o = Output(UInt(32.W))

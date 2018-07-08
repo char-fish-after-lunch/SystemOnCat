@@ -1,14 +1,13 @@
 package systemoncat.sysbus
 
 import chisel3._
-import chisel3.{Input, Output}
 import chisel3.util.{BitPat, Lookup}
 
 object SysBusTranslator{
     
 }
 
-class SysBusTranslator(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends SysBusSlave{
+class SysBusTranslator(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends Module with SysBusSlave{
     // val io = IO(new SysBusSlaveBundle)
     val slavesN = slaves.length
 

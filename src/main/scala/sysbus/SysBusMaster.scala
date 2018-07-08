@@ -1,7 +1,8 @@
 package systemoncat.sysbus
 
+// import chisel3._
 import chisel3._
-import chisel3.{Input, Output}
+import chisel3.core.BaseModule
 
 class SysBusMasterBundle extends Bundle{
     val dat_i = Input(UInt(32.W))
@@ -18,6 +19,6 @@ class SysBusMasterBundle extends Bundle{
     val we_o = Output(Bool())
 }
 
-class SysBusMaster extends Module{
+trait SysBusMaster extends BaseModule{
     val io = IO(new SysBusMasterBundle)
 }
