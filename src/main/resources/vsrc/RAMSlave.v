@@ -32,6 +32,8 @@ output sram_we;
 output sram_lb;
 output sram_ub;
 
+reg [31:0] stored_dat;
+
 
 localparam STATE_IDLE = 3'b000,
     STATE_READ = 3'b001;
@@ -42,18 +44,25 @@ wire [2:0] state;
 always@(posedge clk_ram) begin
     case(state)
         STATE_IDLE: begin
+            ack_o = 1'b0;
             if (cyc_i and stb_i) begin
                 // transaction cycle requested
-                if(we_i)
+                if(we_i) begin
+                    stored_dat <= dat_i;
                     state = STATE_WRITE;
+                end
                 else
                     state = STATE_READ;
             end
         end
         STATE_WRITE: begin
-            
+            stored_dat <= sram_dat;
+            ack_o = 1'b1;
+            state = STATE_IDLE;
         end
         STATE_READ: begin
+            ack_o = 1'b1;
+            state = STATE_IDLE;
         end
     endcase
 end
@@ -65,13 +74,20 @@ always@* begin
         end
         STATE_READ: begin
             sram_we = 1'b1;
+            sram_dat = {32{1'Z}};
             sram_ce = 1'b0;
         end
         STATE_WRITE: begin
             sram_we = 1'b0;
-            sram_ce = 1'b0;
+            sram_dat = stored_dat;
+            sra_ce = 1'b0;
         end
     endcase
+
+    sram_lb = 1'b0;
+    sram_ub = 1'b0;
+    sram_oe = 1'b0;
+    dat_o = stored_dat;
 end
 
 endmodule
