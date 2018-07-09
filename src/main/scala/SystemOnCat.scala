@@ -1,8 +1,11 @@
 package systemoncat
 
-import Chisel._
-import chisel3.{Input, Output}
+import chisel3._
+import chisel3.util._
+import systemoncat.core._
 
 class SystemOnCat extends Module {
-    val io = IO(new Bundle{})
+    val io = IO(new CoreIO)
+    val core = Module(new Core())
+    core.io.devs <> io.devs
 }
