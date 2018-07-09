@@ -1,5 +1,5 @@
 module RAMSlave(dat_i, dat_o, ack_o, adr_i, adr_i, cyc_i,
-    stall_o, err_o, rty_o, sel_i, stb_i, we_i,
+    err_o, rty_o, sel_i, stb_i, we_i,
     sram_adr, sram_dat, sram_ce, sram_oe,
     sram_we, sram_lb, sram_ub, clock_bus, rst_bus, clk_ram, rst_ram);
 
@@ -16,7 +16,6 @@ output [31:0] dat_o;
 output ack_o;
 input [31:0] adr_i;
 input cyc_i;
-output stall_o;
 output err_o;
 output rty_o;
 input [3:0] sel_i;
@@ -88,6 +87,9 @@ always@* begin
     sram_ub = 1'b0;
     sram_oe = 1'b0;
     dat_o = stored_dat;
+
+    err_o = 1'b0;
+    rty_o = 1'b0;
 end
 
 endmodule

@@ -9,7 +9,6 @@ class SysBusSlaveBundle extends Bundle{
     val ack_o = Output(Bool())
     val adr_i = Input(UInt(32.W))
     val cyc_i = Input(Bool())
-    val stall_o = Output(Bool())
     val err_o = Output(Bool())
     val rty_o = Output(Bool())
     val sel_i = Input(UInt(4.W))

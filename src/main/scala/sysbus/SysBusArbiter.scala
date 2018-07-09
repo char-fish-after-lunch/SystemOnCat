@@ -47,7 +47,6 @@ class SysBusArbiter(masters: Seq[SysBusMaster]) extends Module with SysBusMaster
     for(i <- 0 until mastersN){
         val sel = (turn === i.U)
         masters(i).io.dat_i := Mux(sel, io.dat_i, 0.U)
-        masters(i).io.stall_i := Mux(sel, io.stall_i, true.B)
         masters(i).io.ack_i := Mux(sel, io.ack_i, false.B)
         masters(i).io.err_i := Mux(sel, io.err_i, false.B)
         masters(i).io.rty_i := Mux(sel, io.rty_i, false.B)

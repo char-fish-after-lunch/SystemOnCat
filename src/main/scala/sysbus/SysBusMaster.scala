@@ -10,7 +10,6 @@ class SysBusMasterBundle extends Bundle{
     val ack_i = Input(Bool())
     val adr_o = Output(UInt(32.W))
     val cyc_o = Output(Bool())
-    val stall_i = Input(Bool())
     val err_i = Input(Bool())
     val lock_o = Output(Bool())
     val rty_i = Input(Bool())
