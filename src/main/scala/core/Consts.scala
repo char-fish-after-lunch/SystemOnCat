@@ -32,6 +32,9 @@ trait DecoderConstants {
     def MOP_RD   = 1.U(2.W) // load
     def MOP_WR   = 2.U(2.W) // store
     def MOP_FL   = 3.U(2.W) // flush(used in fence)
+    def isRead(cmd: UInt) = cmd === MOP_RD
+    def isWrite(cmd: UInt) = cmd === MOP_WR
+
 
     def MEM_X  = 0.U(3.W)
     def MEM_B  = 1.U(3.W)

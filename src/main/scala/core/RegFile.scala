@@ -13,7 +13,7 @@ class RegFileIO() extends Bundle {
   val wdata  = Input(UInt(32.W))
 }
 
-class RegFile(implicit val p: Parameters) extends Module with CoreParams {
+class RegFile() extends Module {
   val io = IO(new RegFileIO)
   val regs = Mem(32, UInt(32.W))
   io.rdata1 := Mux(io.raddr1.orR, regs(io.raddr1), 0.U)
