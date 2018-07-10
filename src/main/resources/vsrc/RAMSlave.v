@@ -38,6 +38,10 @@ localparam STATE_IDLE = 3'b000,
 
 reg [2:0] state;
 
+initial begin
+    state <= STATE_IDLE;
+end
+
 always@(posedge clk_bus) begin
     case(state)
         STATE_IDLE: begin
