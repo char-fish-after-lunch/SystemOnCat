@@ -138,7 +138,51 @@ class CSRFile() extends Module{
   val mtimecmp = Reg(UInt(32.W))
   val msip = Reg(UInt(32.W))
 
-  
+  //Read CSR logic
+  when(io.csr_ena & io.csr_rd_en){
+    when(io.csr_idx === "h300".U(12.W)){
+      io.read_csr_dat := mstatus
+    } .elsewhen(io.csr_idx === "h304".U(12.W)){
+      io.read_csr_dat := mie
+    } .elsewhen(io.csr_idx === "h344".U(12.W)){
+      io.read_csr_dat := mip
+    } .elsewhen(io.csr_idx === "h305".U(12.W)){
+      io.read_csr_dat := mtvec
+    } .elsewhen(io.csr_idx === "h340".U(12.W)){
+      io.read_csr_dat := mscratch
+    } .elsewhen(io.csr_idx === "h341".U(12.W)){
+      io.read_csr_dat := mepc
+    } .elsewhen(io.csr_idx === "h342".U(12.W)){
+      io.read_csr_dat := mcause
+    } .elsewhen(io.csr_idx === "hb00".U(12.W)){
+      io.read_csr_dat := mcycle
+    } .elsewhen(io.csr_idx === "hb80".U(12.W)){
+      io.read_csr_dat := mcycleh
+    }
+  }
+
+  //Write CSR logic
+  when(io.csr_ena & io.csr_wr_en){
+    when(io.csr_idx === "h300".U(12.W)){
+      mstatus := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "h304".U(12.W)){
+      mie := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "h344".U(12.W)){
+      mip := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "h305".U(12.W)){
+      mtvec := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "h340".U(12.W)){
+      mscratch := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "h341".U(12.W)){
+      mepc := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "h342".U(12.W)){
+      mcause := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "hb00".U(12.W)){
+      mcycle := io.wb_csr_dat
+    } .elsewhen(io.csr_idx === "hb80".U(12.W)){
+      mcycleh := io.wb_csr_dat
+    }
+  }
 
 }
 
