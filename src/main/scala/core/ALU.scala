@@ -40,7 +40,6 @@ class ALUIO extends Bundle {
 
 class ALU extends Module {
     val io = IO(new ALUIO)
-    io.out := (io.in1 + io.in2).asUInt
 
     val in2_inv = Mux(needSub(io.fn), ~io.in2, io.in2)
     val xor_result = io.in1 ^ in2_inv
@@ -50,7 +49,7 @@ class ALU extends Module {
         Mux(io.in1(31) === io.in2(31), add_result(31),
         Mux(isCmpUnsigned(io.fn), io.in2(31), io.in1(31)))
     
-    io.cmp_out := isCmpInverted(io.fn) ^ Mux(isCmpEq(io.fn), xor_result === 0.U, slt)
+    io.cmp_out := isCmpInverted(io.fn) ^ Mux(isCmpEq(io.fn), io.in1 === io.in2, slt)
 
     val shin = Mux(isShiftR(io.fn), io.in1, Reverse(io.in1.asUInt)) // if shift left, then reverse -> shift right -> reverse
     val shout_r = (Cat(isSRA(io.fn) & shin(31), shin).asSInt >> io.in2(4,0))(31,0)
