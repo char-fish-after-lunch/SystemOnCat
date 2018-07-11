@@ -111,13 +111,13 @@ class Datapath() extends Module {
         yield Mux(ex_reg_rs_bypass(i), MuxLookup(ex_reg_bypass_src(i), ex_reg_rdatas(i), bypass_mux), ex_reg_rdatas(i))
 
     // alu logic
-    val ex_op1 = MuxLookup(ex_ctrl_sigs.A1_sel, 0.S, Seq(
-        A1_RS1 -> ex_rs(0).asSInt,
-        A1_PC -> ex_reg_pc.asSInt))
-    val ex_op2 = MuxLookup(ex_ctrl_sigs.A2_sel, 0.S, Seq(
-        A2_RS2 -> ex_rs(1).asSInt,
-        A2_IMM -> ex_reg_imme.asSInt,
-        A2_SIZE -> 4.S))
+    val ex_op1 = MuxLookup(ex_ctrl_sigs.A1_sel, 0.U, Seq(
+        A1_RS1 -> ex_rs(0),
+        A1_PC -> ex_reg_pc))
+    val ex_op2 = MuxLookup(ex_ctrl_sigs.A2_sel, 0.U, Seq(
+        A2_RS2 -> ex_rs(1),
+        A2_IMM -> ex_reg_imme,
+        A2_SIZE -> 4.U))
 
     val alu = Module(new ALU)
     alu.io.fn := ex_ctrl_sigs.alu_op
