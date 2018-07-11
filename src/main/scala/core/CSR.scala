@@ -12,23 +12,23 @@ object PRV
   val M = 3
 }
 
-class MStatus extends Budle{
+class MStatus extends Bundle{
 	val uie = Bool()
 	val sie = Bool()
-	val zero1 = UInt(width = 1)
+	val zero1 = UInt(1.W)
 	val mie = Bool() //globle interupt enable
 
 	val upie = Bool()
 	val spie = Bool()
-	val zero2 = UInt(width = 1)
+	val zero2 = UInt(1.W)
 	val mpie = Bool() //previous mie (Saved status)
 	
-	val spp = UInt(width = 1)
-	val zero3 = UInt(width = 2)
-	val mpp = UInt(width = 2) //previous mode
+	val spp = UInt(1.W)
+	val zero3 = UInt(2.W)
+	val mpp = UInt(2.W) //previous mode
 
-	val fs = UInt(width = 2) //Floating part status
-	val xs = UInt(width = 2) 
+	val fs = UInt(2.W) //Floating part status
+	val xs = UInt(2.W) 
 
 	val mprv = Bool() // Memory translation according to which privilege
 	val mxr = Bool() // Make executable Readable(hard wired to 0 if S-mode is not supported)
@@ -37,14 +37,14 @@ class MStatus extends Budle{
 	val tw = Bool() // (hard wired to 0 if S-mode is not supported)
 	val tsr = Bool() // (hard wired to 0 if S-mode is not supported)
 
-	val zero4 = UInt(width = 8)
+	val zero4 = UInt(8.W)
 	val sd = Bool() // Mark fs xs dirty
 }
 
 class DCSR extends Bundle { //Debug Registers
-  val xdebugver = UInt(width = 2)
-  val zero4 = UInt(width=2)
-  val zero3 = UInt(width = 12)
+  val xdebugver = UInt(2.W)
+  val zero4 = UInt(2.W)
+  val zero3 = UInt(12.W)
   val ebreakm = Bool()
   val ebreakh = Bool()
   val ebreaks = Bool()
@@ -52,15 +52,14 @@ class DCSR extends Bundle { //Debug Registers
   val zero2 = Bool()
   val stopcycle = Bool()
   val stoptime = Bool()
-  val cause = UInt(width = 3)
-  val zero1 = UInt(width=3)
+  val cause = UInt(3.W)
+  val zero1 = UInt(3.W)
   val step = Bool()
-  val prv = UInt(width = PRV.SZ)
+  val prv = UInt(PRV.SZ.W)
 }
 
-class MIP(implicit p: Parameters) extends CoreBundle()(p)
-    with HasCoreParameters {
-  val lip = Vec(coreParams.nLocalInterrupts, Bool())
+class MIP() extends Bundle() {
+  //val lip = Vec(coreParams.nLocalInterrupts, Bool())
   val zero2 = Bool()
   val debug = Bool() // keep in sync with CSR.debugIntCause
   val zero1 = Bool()
@@ -78,19 +77,30 @@ class MIP(implicit p: Parameters) extends CoreBundle()(p)
   val ssip = Bool()
   val usip = Bool()
 }
-
-class PTBR(implicit p: Parameters) extends CoreBundle()(p) { //For Page Table 
+/*
+class PTBR() { //For Page Table 
   def pgLevelsToMode = 1
   val modeBits = 1
   val maxASIdBits = 9
   
   //require(modeBits + maxASIdBits + maxPAddrBits - pgIdxBits == xLen)
 
-  val mode = UInt(width = modeBits)
-  val asid = UInt(width = maxASIdBits)
-  val ppn = UInt(width = maxPAddrBits - pgIdxBits)
+  val mode = UInt(modeBits.W)
+  val asid = UInt(maxASIdBits.W)
+  val ppn = UInt((maxPAddrBits - pgIdxBits).W)
 }
-
+*/
+object CSR
+{
+    def X = 0.U(3.W)
+    def N = 0.U(3.W)
+    def W = 1.U(3.W)
+    def S = 2.U(3.W)
+    def C = 3.U(3.W)
+    def I = 4.U(3.W)
+    def R = 5.U(3.W)
+}
+/*
 class CSR extends Module
 {
   val io = IO(new Bundle{
@@ -112,9 +122,5 @@ class CSR extends Module
   	val read_csr_dat = Output(UInt(32.W))
 
   })
-
-
-
-
-
 }
+*/
