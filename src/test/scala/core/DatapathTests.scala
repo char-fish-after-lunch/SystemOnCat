@@ -5,8 +5,12 @@ import chisel3.util._
 import chisel3.testers._
 
 class DatapathTester(dp: => Datapath) extends BasicTester {
-    val datapath = Module(dp)
+    val dpath = Module(dp)
     // TODO: implement me!
+    val ctrl = Module(new Control)
+    dpath.io.ctrl <> ctrl.io
+    assert(1 == 1)
+    stop()
 }
 
 

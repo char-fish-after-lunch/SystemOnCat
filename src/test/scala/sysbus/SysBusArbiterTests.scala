@@ -6,6 +6,8 @@ import chisel3.testers._
 
 class SysBusArbiterTester(br: => SysBusArbiter) extends BasicTester {
     val arbiter = Module(br)
+    assert(1 == 1)
+    stop()
 }
 
 
