@@ -17,13 +17,13 @@ class CoreIO() extends Bundle {
 }
 
 class Core() extends Module {
-  val io = IO(new CoreIO)
-  val dpath = Module(new Datapath) 
-  val ctrl  = Module(new Control)
-  dpath.io.ctrl <> ctrl.io
-
-  // temporary init
-  io.devs.leds := "b0000111100001111".U
-  io.devs.dpy0 := 0.U(8.W)
-  io.devs.dpy1 := 0.U(8.W)
+    val io = IO(new CoreIO)
+    val dpath = Module(new Datapath) 
+    val ctrl  = Module(new Control)
+    val ifetch = Module(new IFetch)
+    val dmem = Module(new DMem)
+    dpath.io.ctrl <> ctrl.io
+    dpath.io.debug_devs <> io.devs
+    dpath.io.imem <> ifetch.io
+    dpath.io.dmem <> dmem.io
 }

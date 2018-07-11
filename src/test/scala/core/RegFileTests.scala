@@ -6,8 +6,6 @@ import chisel3.testers._
 
 class RegFileTester(rf: => RegFile) extends BasicTester {
     val regfile = Module(rf)
-    // TODO: implement me!
-
 
     val test_seq = Seq(
         (0.U(5.W), 1.U(5.W), true.B, 7.U(5.W), 0xbeef.U(32.W)),

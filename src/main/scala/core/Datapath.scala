@@ -5,6 +5,9 @@ import chisel3.util._
 
 class DatapathIO() extends Bundle {
     val ctrl = Flipped(new DecoderIO)
+    val debug_devs = new DebugDevicesIO()
+    val imem = Flipped(new IFetchIO)
+    val dmem = Flipped(new DMemIO)
 }
 
 class Datapath() extends Module {
@@ -50,12 +53,11 @@ class Datapath() extends Module {
     val inst_reg = RegInit(NOP) // instruction in IF
 
     // ---------- IF -----------
-    val ifetch = Module(new IFetch)
-    ifetch.io.pc := pc
+    io.imem.pc := pc
 
     // ---------- ID -----------
     // regs update
-    inst_reg := ifetch.io.inst
+    inst_reg := io.imem.inst
     io.ctrl.inst := inst_reg
     id_reg_pc := pc
 
@@ -135,14 +137,12 @@ class Datapath() extends Module {
         mem_reg_wdata := alu.io.out
         mem_reg_valid := ex_reg_valid // TODO: check valid (stall logic related)
     }
-    
-    val dmem = Module(new DMem)
 
-    dmem.io.wr_data := mem_reg_rs2
-    dmem.io.addr := mem_reg_wdata
-    dmem.io.wr_en := mem_ctrl_sigs.mem && isWrite(mem_ctrl_sigs.mem_cmd)
-    dmem.io.rd_en := mem_ctrl_sigs.mem && isRead(mem_ctrl_sigs.mem_cmd)
-    dmem.io.mem_type := mem_ctrl_sigs.mem_type
+    io.dmem.wr_data := mem_reg_rs2
+    io.dmem.addr := mem_reg_wdata
+    io.dmem.wr_en := mem_ctrl_sigs.mem && isWrite(mem_ctrl_sigs.mem_cmd)
+    io.dmem.rd_en := mem_ctrl_sigs.mem && isRead(mem_ctrl_sigs.mem_cmd)
+    io.dmem.mem_type := mem_ctrl_sigs.mem_type
 
     // ---------- WB -----------
     when (mem_reg_valid) {
@@ -153,10 +153,15 @@ class Datapath() extends Module {
     }
 
     reg_write := MuxLookup(wb_ctrl_sigs.wb_sel, wb_reg_wdata, Seq(
-        WB_MEM -> dmem.io.rd_data,
+        WB_MEM -> io.dmem.rd_data,
         WB_PC4 -> (wb_reg_pc + 4.U),
         WB_ALU -> wb_reg_wdata
         // WB_CSR -> csr.io.out.zext) 
         )).asUInt
 
+
+    // temporary init
+    io.debug_devs.leds := reg_write
+    io.debug_devs.dpy0 := pc(7, 0)
+    io.debug_devs.dpy1 := alu.io.out(7, 0)
 }

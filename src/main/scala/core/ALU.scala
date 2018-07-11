@@ -39,7 +39,6 @@ class ALUIO extends Bundle {
 }
 
 class ALU extends Module {
-    //  TODO: implement ALU!
     val io = IO(new ALUIO)
     io.out := (io.in1 + io.in2).asUInt
 

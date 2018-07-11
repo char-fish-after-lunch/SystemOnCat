@@ -7,7 +7,7 @@ import ALU._
 
 class ALUTester(alu: => ALU) extends BasicTester with TestUtils {
     val testalu = Module(alu)
-    // TODO: implement me!
+    
     val ctrl = Module(new Control)
 
     val (cntr, done) = Counter(true.B, insts.size)
