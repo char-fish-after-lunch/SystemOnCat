@@ -102,7 +102,7 @@ class Datapath() extends Module {
     for (i <- 0 until id_raddr.size) {
         val do_bypass = id_bypass_src(i).reduce(_ || _) // at least one bypass is possible
         val bypass_src = PriorityEncoder(id_bypass_src(i))
-        ex_reg_rs_bypass(i) := do_bypass // bypass is checked at IF, but done in EXE
+        ex_reg_rs_bypass(i) := do_bypass // bypass is checked at ID, but done in EXE
         ex_reg_bypass_src(i) := bypass_src
         ex_reg_rdatas(i) := id_rdatas(i)
     }
