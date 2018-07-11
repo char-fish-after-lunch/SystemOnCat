@@ -60,6 +60,7 @@ class DCSR extends Bundle { //Debug Registers
 
 class MIP() extends Bundle() {
   //val lip = Vec(coreParams.nLocalInterrupts, Bool())
+  val lip = UInt(16.W)
   val zero2 = Bool()
   val debug = Bool() // keep in sync with CSR.debugIntCause
   val zero1 = Bool()
@@ -92,14 +93,55 @@ class PTBR() { //For Page Table
 */
 object CSR
 {
-    def X = 0.U(3.W)
-    def N = 0.U(3.W)
-    def W = 1.U(3.W)
-    def S = 2.U(3.W)
-    def C = 3.U(3.W)
-    def I = 4.U(3.W)
-    def R = 5.U(3.W)
+    def X = 0.U(3.W) //CSR operator type
+    def N = 0.U(3.W) //CSR disable
+    def W = 1.U(3.W) //CSR Write
+    def S = 2.U(3.W) //CSR Set
+    def C = 3.U(3.W) //CSR Clear
+    def I = 4.U(3.W) //CSR Interupt
+    def R = 5.U(3.W) //CSR Read
 }
+
+class CSRFileIO() extends Bundle{
+    // commands
+    val csr_ena = Input(Bool())
+    val csr_wr_en = Input(Bool())
+    val csr_rd_en = Input(Bool())
+
+    // interupt request
+    val ext_irq_r = Input(Bool()) //external interupt
+    val sft_irq_r = Input(Bool()) //software interupt
+    val tmr_irq_r = Input(Bool()) //timer interupt
+
+    //csr index
+    val csr_idx = Input(UInt(12.W))
+
+    //Read Write data
+    val wb_csr_dat = Input(UInt(32.W))
+    val read_csr_dat = Output(UInt(32.W))
+}
+
+class CSRFile() extends Module{
+  val io = IO(new CSRFileIO)
+
+  val mstatus = Reg(new MStatus) // 0x300
+//val mhartid = Reg(UInt(32.W))  // 0xF14
+  val mie = Reg(UInt(32.W))      // 0x304
+  val mip = Reg(new MIP)         // 0x344
+  val mtvec = Reg(UInt(32.W))    // 0x305
+  val mscratch = Reg(UInt(32.W)) // 0x340
+  val mepc = Reg(UInt(32.W))     // 0x341
+  val mcause = Reg(UInt(32.W))   // 0x342
+  val mcycle = Reg(UInt(32.W))  // 0xB00
+  val mcycleh = Reg(UInt(32.W)) // 0xB80
+  val mtime = Reg(UInt(32.W))
+  val mtimecmp = Reg(UInt(32.W))
+  val msip = Reg(UInt(32.W))
+
+  
+
+}
+
 /*
 class CSR extends Module
 {
