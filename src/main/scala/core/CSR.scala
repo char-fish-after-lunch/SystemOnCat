@@ -18,10 +18,10 @@ object Cause{
   val Interrupt = 1.U(1.W)
   val Exception = 0.U(1.W)
 
-  val UFI = 0.U(31.W) //User software interrupt
-  val SFI = 1.U(31.W) 
-  val HFI = 2.U(31.W)
-  val MFI = 3.U(31.W) //Machine software interrupt
+  val USI = 0.U(31.W) //User software interrupt
+  val SSI = 1.U(31.W) 
+  val HSI = 2.U(31.W)
+  val MSI = 3.U(31.W) //Machine software interrupt
 
   val UTI = 4.U(31.W) 
   val STI = 5.U(31.W)
@@ -120,14 +120,17 @@ class MIP() extends Bundle() {
   val debug = Bool() // keep in sync with CSR.debugIntCause
   val zero1 = Bool()
   val rocc = Bool()
+
   val meip = Bool()
   val heip = Bool()
   val seip = Bool()
   val ueip = Bool()
+  
   val mtip = Bool()
   val htip = Bool()
   val stip = Bool()
   val utip = Bool()
+  
   val msip = Bool()
   val hsip = Bool()
   val ssip = Bool()
@@ -222,7 +225,7 @@ class CSRFile() extends Module{
 //val mhartid = Reg(UInt(32.W))  // 0xF14
   
   // Interrupt Enable
-  val mie = Reg(UInt(32.W))      // 0x304
+  val mie = Reg(new MIE)      // 0x304
   // Interrupt Waiting  
   val mip = Reg(new MIP)         // 0x344
   // Interrupt Entry Address
@@ -362,5 +365,43 @@ class CSRFile() extends Module{
     mstatus.mie := mstatus.mpie
   }
 
+  //Interrupt Handler
+  val next_pc = Mux((io.sig.jal | io.sig.jalr | io.sig.branch), (io.pc >> 2 << 2), (io.pc >> 2 << 2) + 4.U(32.W))
+
+  when(io.ext_irq_r){ mip.meip := true.B} .otherwise {mip.meip := false.B}
+  when(io.tmr_irq_r){ mip.mtip := true.B} .otherwise {mip.mtip := false.B}
+  when(io.sft_irq_r){ mip.msip := true.B} .otherwise {mip.msip := false.B}
+  
+  when(mip.meip){ //Extenral Interrupt Handler
+    when(mstatus.mie & mie.meie){
+      mepc := next_pc
+      mcause := Cat(Cause.Interrupt, Cause.MEI)
+      
+      prv := PRV.M
+      mstatus.mpp := prv
+      mstatus.mie := false.B
+      mstatus.mpie := mstatus.mie
+    }
+  } .elsewhen(mip.msip){ //Software Interrupt Handler
+    when(mstatus.mie & mie.msie){
+      mepc := next_pc
+      mcause := Cat(Cause.Interrupt, Cause.MSI)
+      
+      prv := PRV.M
+      mstatus.mpp := prv
+      mstatus.mie := false.B
+      mstatus.mpie := mstatus.mie
+    }
+  } .elsewhen(mip.mtip){ //Time Interrupt Handler
+    when(mstatus.mie & mie.mtie){
+      mepc := next_pc
+      mcause := Cat(Cause.Interrupt, Cause.MTI)
+      
+      prv := PRV.M
+      mstatus.mpp := prv
+      mstatus.mie := false.B
+      mstatus.mpie := mstatus.mie
+    }
+  }
 
 }
