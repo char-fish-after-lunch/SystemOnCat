@@ -30,6 +30,7 @@ output wire [3:0] sram_be;
 
 reg [31:0] stored_dat;
 reg [19:0] target_adr;
+reg [3:0] bit_sel;
 
 
 localparam STATE_IDLE = 3'b000,
@@ -48,7 +49,8 @@ always@(posedge clk_bus) begin
             if (cyc_i && stb_i) begin
                 ack_o <= 1'b1;
                 // transaction cycle requested
-                target_adr <= adr_i[19:0];
+                target_adr <= adr_i[21:2];
+                bit_sel <= sel_i;
                 if(we_i) begin
                     stored_dat <= dat_i;
                     state <= STATE_WRITE;
@@ -68,28 +70,11 @@ always@(posedge clk_bus) begin
     endcase
 end
 
-//always@* begin
-//    case(state)
-//        STATE_IDLE: begin
-//            sram_ce = 1'b1;
-//        end
-//        STATE_READ: begin
-//            sram_we = 1'b1;
-//            sram_dat = {32{1'Z}};
-//            sram_ce = 1'b0;
-//        end
-//        STATE_WRITE: begin
-//            sram_we = 1'b0;
-//            sram_dat = stored_dat;
-//            sra_ce = 1'b0;
-//        end
-//    endcase
-//end
+
     assign sram_we = state != STATE_WRITE;
     assign sram_ce = state == STATE_IDLE;
     assign sram_dat = state == STATE_WRITE ? stored_dat : {32{1'bZ}};
     
-    assign sram_be = 4'b0000;
     assign sram_oe = 1'b0;
 
     assign dat_o = sram_dat;
@@ -98,5 +83,6 @@ end
     assign rty_o = 1'b0;
 
     assign sram_adr = target_adr;
+    assign sram_be = ~bit_sel;
 
 endmodule
