@@ -13,32 +13,33 @@ object PRV
 }
 
 class MStatus extends Bundle{
-	val uie = Bool()
-	val sie = Bool()
-	val zero1 = UInt(1.W)
-	val mie = Bool() //globle interupt enable
+  val sd = Bool()
+  val zero1 = UInt(width = 8)
 
-	val upie = Bool()
-	val spie = Bool()
-	val zero2 = UInt(1.W)
-	val mpie = Bool() //previous mie (Saved status)
-	
-	val spp = UInt(1.W)
-	val zero3 = UInt(2.W)
-	val mpp = UInt(2.W) //previous mode
-
-	val fs = UInt(2.W) //Floating part status
-	val xs = UInt(2.W) 
-
-	val mprv = Bool() // Memory translation according to which privilege
-	val mxr = Bool() // Make executable Readable(hard wired to 0 if S-mode is not supported)
-	val sum = Bool() // Permit Supervisor User Memory access (hard wired to 0 if S-mode is not supported)
-	val tvm = Bool() //(hard wired to 0 if S-mode is not supported)
-	val tw = Bool() // (hard wired to 0 if S-mode is not supported)
-	val tsr = Bool() // (hard wired to 0 if S-mode is not supported)
-
-	val zero4 = UInt(8.W)
-	val sd = Bool() // Mark fs xs dirty
+//Memory Accessing Realted Regeisters
+  val tsr = Bool()
+  val tw = Bool()
+  val tvm = Bool()
+  val mxr = Bool()
+  val sum = Bool()
+  val mprv = Bool()
+  
+  val xs = UInt(width = 2)
+  val fs = UInt(width = 2) //Floating part status
+  
+  val mpp = UInt(width = 2) //previous mode
+  val hpp = UInt(width = 2)
+  val spp = UInt(width = 1)
+  
+  val mpie = Bool() //previous mie (Saved status)
+  val hpie = Bool()
+  val spie = Bool()
+  val upie = Bool()
+  
+  val mie = Bool() //globle interupt enable
+  val hie = Bool()
+  val sie = Bool()
+  val uie = Bool()
 }
 
 class DCSR extends Bundle { //Debug Registers
