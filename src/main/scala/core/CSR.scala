@@ -12,11 +12,46 @@ object PRV
   val M = 3
 }
 
+object Cause{
+  val Interrupt = 1.U(1.W)
+  val Exception = 0.U(1.W)
+
+  val UFI = 0.U(31.W) //User software interrupt
+  val SFI = 1.U(31.W) 
+  val HFI = 2.U(31.W)
+  val MFI = 3.U(31.W) //Machine software interrupt
+
+  val UTI = 4.U(31.W) 
+  val STI = 5.U(31.W)
+  val HTI = 6.U(31.W)
+  val MTI = 7.U(31.W) //Machine timer interrupt
+
+  val UEI = 8.U(31.W)
+  val SEI = 9.U(31.W)
+  val HEI = 10.U(31.W)
+  val MEI = 11.U(31.W) //Machine External interrupt
+
+  val IAM = 0.U(31.W) //Instruction Address Misaligned
+  val IAF = 1.U(31.W) //Instruction Access Fault
+  val II = 2.U(31.W)  //Illegal Instruction
+  val BP = 3.U(31.W)  //BreakPoint
+  val LAM = 4.U(31.W) //Load Address Misaligned
+  val LAF = 5.U(31.W) //Load Access Fault
+  val SAM = 6.U(31.W) //Store Address Misaligned
+  val SAF = 7.U(31.W) //Store Access Fault
+  val ECU = 8.U(31.W) //Environment Call of U-mode
+  val ECS = 9.U(31.W) //Environment Call of S-mode
+  val ECH = 10.U(31.W)//Environment Call of H-mode
+  val ECM = 11.U(31.W)//Environment Call of M-mode
+  val IPF = 12.U(31.W)//Instruction page Fault
+  val LPF = 13.U(31.W)//Load page Fault
+  val SPF = 14.U(31.W)//Save page Fault
+}
 class MStatus extends Bundle{
   val sd = Bool()
-  val zero1 = UInt(width = 8)
+  val zero1 = UInt(8.W)
 
-//Memory Accessing Realted Regeisters
+  //Memory Accessing Realted Regeisters
   val tsr = Bool()
   val tw = Bool()
   val tvm = Bool()
@@ -24,12 +59,12 @@ class MStatus extends Bundle{
   val sum = Bool()
   val mprv = Bool()
   
-  val xs = UInt(width = 2)
-  val fs = UInt(width = 2) //Floating part status
+  val xs = UInt(2.W)
+  val fs = UInt(2.W) //Floating part status
   
-  val mpp = UInt(width = 2) //previous mode
-  val hpp = UInt(width = 2)
-  val spp = UInt(width = 1)
+  val mpp = UInt(2.W) //previous mode
+  val hpp = UInt(2.W)
+  val spp = UInt(2.W)
   
   val mpie = Bool() //previous mie (Saved status)
   val hpie = Bool()
@@ -79,6 +114,12 @@ class MIP() extends Bundle() {
   val ssip = Bool()
   val usip = Bool()
 }
+
+class MTVEC() extends Bundle(){
+  val base = UInt(30.W)
+  val mode = UInt(2.W)
+}
+
 /*
 class PTBR() { //For Page Table 
   def pgLevelsToMode = 1
@@ -130,7 +171,8 @@ class CSRFile() extends Module{
 //val mhartid = Reg(UInt(32.W))  // 0xF14
   val mie = Reg(UInt(32.W))      // 0x304
   val mip = Reg(new MIP)         // 0x344
-  val mtvec = Reg(UInt(32.W))    // 0x305
+  val mtvec = Reg(new MTVEC)    // 0x305
+  val mtval = Reg(UInt(32.W))
   val mscratch = Reg(UInt(32.W)) // 0x340
   val mepc = Reg(UInt(32.W))     // 0x341
   val mcause = Reg(UInt(32.W))   // 0x342
@@ -169,6 +211,9 @@ class CSRFile() extends Module{
     .elsewhen(io.csr_idx === "hb80".U(12.W)){
       io.read_csr_dat := mcycleh
     }
+    .otherwise{
+      io.read_csr_dat := 0.U(32.W)
+    }
   }
 
   val wb_dat = MuxLookup(io.csr_cmd, 0.U, Seq(
@@ -186,9 +231,9 @@ class CSRFile() extends Module{
     .elsewhen(io.csr_idx === "h304".U(12.W)){
       mie := wb_dat
     } 
-    .elsewhen(io.csr_idx === "h344".U(12.W)){
-      mip := wb_dat
-    } 
+    //.elsewhen(io.csr_idx === "h344".U(12.W)){ MIP is read only
+      //mip := wb_dat
+    //} 
     .elsewhen(io.csr_idx === "h305".U(12.W)){
       mtvec := wb_dat
     } 
@@ -207,31 +252,9 @@ class CSRFile() extends Module{
     .elsewhen(io.csr_idx === "hb80".U(12.W)){
       mcycleh := wb_dat
     }
+    .otherwise{
+      io.read_csr_dat := 0.U(32.W)
+    }
   }
 
 }
-
-/*
-class CSR extends Module
-{
-  val io = IO(new Bundle{
-	 // commands
-  	val csr_ena = Input(Bool())
-  	val csr_wr_en = Input(Bool())
-  	val csr_rd_en = Input(Bool())
-
-  	// interupt request
-  	val ext_irq_r = Input(Bool()) //external interupt
-  	val sft_irq_r = Input(Bool()) //software interupt
-  	val tmr_irq_r = Input(Bool()) //timer interupt
-
-  	//csr index
-  	val csr_idx = Input(UInt(12.W))
-
-  	//Read Write data
-  	val wb_csr_dat = Input(UInt(32.W))
-  	val read_csr_dat = Output(UInt(32.W))
-
-  })
-}
-*/
