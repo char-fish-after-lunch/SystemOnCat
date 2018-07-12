@@ -45,8 +45,8 @@ end
 always@(posedge clk_bus) begin
     case(state)
         STATE_IDLE: begin
-            ack_o <= 1'b0;
             if (cyc_i && stb_i) begin
+                ack_o <= 1'b1;
                 // transaction cycle requested
                 target_adr <= adr_i[19:0];
                 if(we_i) begin
@@ -58,12 +58,11 @@ always@(posedge clk_bus) begin
             end
         end
         STATE_WRITE: begin
-            ack_o <= 1'b1;
+            ack_o <= 1'b0;
             state <= STATE_IDLE;
         end
         STATE_READ: begin
-            stored_dat <= sram_dat;
-            ack_o <= 1'b1;
+            ack_o <= 1'b0;
             state <= STATE_IDLE;
         end
     endcase
@@ -93,7 +92,7 @@ end
     assign sram_be = 4'b0000;
     assign sram_oe = 1'b0;
 
-    assign dat_o = stored_dat;
+    assign dat_o = sram_dat;
 
     assign err_o = 1'b0;
     assign rty_o = 1'b0;
