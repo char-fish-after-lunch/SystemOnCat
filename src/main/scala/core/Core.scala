@@ -2,6 +2,7 @@ package systemoncat.core
 
 import chisel3._
 import chisel3.util._
+import systemoncat.sysbus._
 
 class DebugDevicesIO() extends Bundle {
     // unimportant devices, e.g: leds, buttons
@@ -17,13 +18,18 @@ class CoreIO() extends Bundle {
 }
 
 class Core() extends Module {
-  val io = IO(new CoreIO)
-  val dpath = Module(new Datapath) 
-  val ctrl  = Module(new Control)
-  dpath.io.ctrl <> ctrl.io
+    val io = IO(new CoreIO)
+    val dpath = Module(new Datapath) 
+    val ctrl  = Module(new Control)
+    val ifetch = Module(new IFetch)
+    val dmem = Module(new DMem)
+    val bus_conn = Module(new SysBusConnector)
 
-  // temporary init
-  io.devs.leds := "b0000111100001111".U
-  io.devs.dpy0 := 0.U(8.W)
-  io.devs.dpy1 := 0.U(8.W)
+    dpath.io.ctrl <> ctrl.io
+    dpath.io.debug_devs <> io.devs
+    dpath.io.imem <> ifetch.io.core
+    dpath.io.dmem <> dmem.io.core
+
+    ifetch.io.bus <> bus_conn.io.imem
+    dmem.io.bus <> bus_conn.io.dmem
 }
