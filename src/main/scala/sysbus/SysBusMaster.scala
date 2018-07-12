@@ -11,11 +11,11 @@ class SysBusMasterBundle extends Bundle{
     val adr_o = Output(UInt(32.W))
     val cyc_o = Output(Bool())
     val err_i = Input(Bool())
-    val lock_o = Output(Bool())
     val rty_i = Input(Bool())
     val sel_o = Output(UInt(4.W))
     val stb_o = Output(Bool())
     val we_o = Output(Bool())
+    val stall_i = Input(Bool())
 }
 
 trait SysBusMaster extends BaseModule{

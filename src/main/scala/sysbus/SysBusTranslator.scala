@@ -18,14 +18,14 @@ class SysBusTranslator(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) ext
     val slave_ack_o = Wire(Vec(slavesN, Bool()))
     val slave_err_o = Wire(Vec(slavesN, Bool()))
     val slave_rty_o = Wire(Vec(slavesN, Bool()))
-
-    val slave_sel_i = Wire(Vec(slavesN, Bool()))
+    val slave_stall_o = Wire(Vec(slavesN, Bool()))
 
     for(i <- 0 until slavesN){
         slave_dat_o(i) := slaves(i).io.dat_o
         slave_ack_o(i) := slaves(i).io.ack_o
         slave_err_o(i) := slaves(i).io.err_o
         slave_rty_o(i) := slaves(i).io.rty_o
+        slave_stall_o(i) := slaves(i).io.stall_o
 
         slaves(i).io.dat_i := io.dat_i
         slaves(i).io.adr_i := io.adr_i
@@ -40,6 +40,6 @@ class SysBusTranslator(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) ext
     io.ack_o := slave_ack_o(slaveSel)
     io.err_o := slave_err_o(slaveSel)
     io.rty_o := slave_rty_o(slaveSel)
-
+    io.stall_o := slave_stall_o(slaveSel)
 
 }
