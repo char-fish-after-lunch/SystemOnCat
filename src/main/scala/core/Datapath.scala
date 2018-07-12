@@ -6,8 +6,8 @@ import chisel3.util._
 class DatapathIO() extends Bundle {
     val ctrl = Flipped(new DecoderIO)
     val debug_devs = new DebugDevicesIO()
-    val imem = Flipped(new IFetchIO)
-    val dmem = Flipped(new DMemIO)
+    val imem = Flipped(new IFetchCoreIO)
+    val dmem = Flipped(new DMemCoreIO)
 }
 
 class Datapath() extends Module {
