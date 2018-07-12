@@ -1,5 +1,5 @@
 module SerialPortSlave(dat_i, dat_o, ack_o, adr_i, cyc_i,
-    err_o, rty_o, sel_i, stb_i, we_i,
+    err_o, rty_o, sel_i, stb_i, we_i, stall_o,
     clk_bus, rst_bus, 
     uart_clk, uart_busy, uart_ready, uart_start,
     uart_dat_i, uart_dat_o);
@@ -20,6 +20,7 @@ output wire rty_o;
 input wire [3:0] sel_i;
 input wire stb_i;
 input wire we_i;
+output wire stall_o;
 
 // ------------------ serial io -----------------
 input wire uart_clk;
@@ -32,6 +33,9 @@ input wire [7:0] uart_dat_i;
 // ------------------ buffer --------------------
 reg [7:0] dat_to_send;
 reg [7:0] dat_received;
+
+wire stall, ack;
+
 
 // ------------------ sliding windows ------------
 reg send_phase, o_send_phase; // o for interface
@@ -56,30 +60,31 @@ localparam STATE_IDLE = 2'b00,
 reg [1:0] state;
 
 always @(posedge clk_bus) begin
-    case(state)
-        STATE_IDLE: begin
-            if(cyc_i && stb_i) begin
-                if(we_i) begin
-                    o_send_phase = ~o_send_phase;
-                    dat_to_send <= dat_i[7:0];
-                    state <= STATE_WRITE;
-                end else begin
-                    state <= STATE_READ;
+    if(cyc_i && stb_i && !stall) begin
+        if(state == STATE_READ)
+            o_recv_phase <= recv_phase;
+        if(we_i) begin
+            o_send_phase = ~o_send_phase;
+            dat_to_send <= dat_i[7:0];
+            state <= STATE_WRITE;
+        end else begin
+            state <= STATE_READ;
+        end
+    end else begin
+        case(state)
+            STATE_READ: begin
+                if(recv_phase != o_recv_phase) begin
+                    o_recv_phase <= recv_phase;
+                    state <= STATE_IDLE;
                 end
             end
-        end
-        STATE_READ: begin
-            if(recv_phase != o_recv_phase) begin
-                o_recv_phase <= recv_phase;
-                state <= STATE_IDLE;
+            STATE_WRITE: begin
+                if(send_phase == o_send_phase) begin
+                    state <= STATE_IDLE;
+                end
             end
-        end
-        STATE_WRITE: begin
-            if(send_phase == o_send_phase) begin
-                state <= STATE_IDLE;
-            end
-        end
-    endcase
+        endcase
+    end
 end
 
 always @(posedge uart_clk) begin
@@ -99,9 +104,14 @@ always @(posedge uart_clk) begin
     end
 end
 
-assign ack_o = (state == STATE_WRITE && send_phase == o_send_phase) | 
+assign ack = (state == STATE_WRITE && send_phase == o_send_phase) | 
         (state == STATE_READ && recv_phase != o_recv_phase);
-
+assign ack_o = ack;
+assign err_o = 0;
+assign rty_o = 0;
 assign dat_o = {{24{1'b0}}, dat_received};
+
+assign stall = (state != STATE_IDLE) & ~ack;
+assign stall_o = stall;
 
 endmodule

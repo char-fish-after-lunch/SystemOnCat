@@ -1,5 +1,5 @@
 module CharGenSlave(dat_i, dat_o, ack_o, adr_i, cyc_i,
-    err_o, rty_o, sel_i, stb_i, we_i,
+    err_o, rty_o, sel_i, stb_i, we_i, stall_o,
     clk_bus, rst_bus, hdata, vdata, dvi_red, dvi_blue, dvi_green,
     de_hp, de_vp, de_svp, de_valid, de_ascii);
 
@@ -19,6 +19,7 @@ output wire rty_o;
 input wire [3:0] sel_i;
 input wire stb_i;
 input wire we_i;
+output wire stall_o;
 
 // ----------------- video io ------------
 
@@ -229,26 +230,30 @@ assign dvi_blue = {2{~painted}};
 reg [1:0] state;
 
 localparam STATE_IDLE = 2'b00,
-    STATE_WRITE = 2'b01;
+    STATE_WRITE = 2'b01,
+    STATE_ERR = 2'b10;
 
 initial begin
     state <= STATE_IDLE;
 end
 
 always @(posedge clk_bus) begin
-    case(state)
-        STATE_IDLE: begin
-            if(cyc_i & stb_i) begin
-                if(we_i) begin
-                    stored_dat <= dat_i;
-                    state <= STATE_WRITE;
-                end
+    if(cyc_i & stb_i) begin
+        if(we_i) begin
+            stored_dat <= dat_i;
+            state <= STATE_WRITE;
+        end else
+            state <= STATE_ERR;
+    end else begin
+        case(state)
+            STATE_WRITE: begin
+                state <= STATE_IDLE;
             end
-        end
-        STATE_WRITE: begin
-            state <= STATE_IDLE;
-        end
-    endcase
+            STATE_ERR: begin
+                state <= STATE_IDLE;
+            end
+        endcase
+    end
     hp <= next_hp;
     vp <= next_vp;
     svp <= next_svp;
@@ -261,6 +266,7 @@ always @(posedge clk_bus) begin
 end
 
 assign ack_o = (state == STATE_WRITE);
+assign err_o = (state == STATE_ERR);
 assign next_hp = state == STATE_WRITE ? (hp == 99 ? 0 : (hp + 1)) : hp;
 assign next_vp = (state == STATE_WRITE && hp == 99) ? (vp == 74 ? 0 : (vp + 1)) : vp;
 assign next_svp = (state == STATE_WRITE && full) ? (svp == 74 ? 0 : (svp + 1)) : svp;
@@ -268,7 +274,6 @@ assign next_full = (state == STATE_WRITE && next_vp == svp && next_hp == 0) ||
     (state != STATE_WRITE && full);
 
 assign rty_o = 1'b0;
-assign err_o = 1'b0;
 
 genvar ig, jg;
 generate
@@ -286,5 +291,6 @@ assign de_vp = vp;
 assign de_hp = hp;
 // assign de_valid = valid;
 assign de_ascii = char_code;
+assign stall_o = 1'b0;
 
 endmodule

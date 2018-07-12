@@ -14,6 +14,7 @@ class SysBusSlaveBundle extends Bundle{
     val sel_i = Input(UInt(4.W))
     val stb_i = Input(Bool())
     val we_i = Input(Bool())
+    val stall_o = Output(Bool())
 }
 
 trait SysBusSlave extends BaseModule{
