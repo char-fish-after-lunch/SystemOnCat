@@ -11,7 +11,11 @@ class SysBusTranslator(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) ext
     // val io = IO(new SysBusSlaveBundle)
     val slavesN = slaves.length
 
+
+    val prevSlave = RegInit(0.U)
     val slaveSel = Lookup(io.adr_i, 0.U, map) // the selected slave
+
+    prevSlave := slaveSel
 
     // from slaves
     val slave_dat_o = Wire(Vec(slavesN, UInt(32.W)))
@@ -27,19 +31,22 @@ class SysBusTranslator(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) ext
         slave_rty_o(i) := slaves(i).io.rty_o
         slave_stall_o(i) := slaves(i).io.stall_o
 
+        val prevSelected = (prevSlave === i.U)
+        val selected = (slaveSel === i.U)
+
         slaves(i).io.dat_i := io.dat_i
         slaves(i).io.adr_i := io.adr_i
-        slaves(i).io.cyc_i := io.cyc_i
+        slaves(i).io.cyc_i := Mux(prevSelected || selected, io.cyc_i, false.B)
         slaves(i).io.sel_i := io.sel_i
         slaves(i).io.we_i := io.we_i
 
-        slaves(i).io.stb_i := (slaveSel === i.U)
+        slaves(i).io.stb_i := Mux(selected, io.stb_i, false.B)
     }
 
-    io.dat_o := slave_dat_o(slaveSel)
-    io.ack_o := slave_ack_o(slaveSel)
-    io.err_o := slave_err_o(slaveSel)
-    io.rty_o := slave_rty_o(slaveSel)
+    io.dat_o := slave_dat_o(prevSlave)
+    io.ack_o := slave_ack_o(prevSlave)
+    io.err_o := slave_err_o(prevSlave)
+    io.rty_o := slave_rty_o(prevSlave)
     io.stall_o := slave_stall_o(slaveSel)
 
 }
