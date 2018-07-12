@@ -2,14 +2,16 @@ package systemoncat.core
 
 import chisel3._
 import chisel3.util._
+import chisel3.Bits._
+
 
 object PRV
 {
-  val SZ = 2
-  val U = 0
-  val S = 1
-  val H = 2
-  val M = 3
+  val SZ = 2.U(2.W)
+  val U = 0.U(2.W)
+  val S = 1.U(2.W)
+  val H = 2.U(2.W)
+  val M = 3.U(2.W)
 }
 
 object Cause{
@@ -91,9 +93,26 @@ class DCSR extends Bundle { //Debug Registers
   val cause = UInt(3.W)
   val zero1 = UInt(3.W)
   val step = Bool()
-  val prv = UInt(PRV.SZ.W)
+  val prv = UInt(2.W)
 }
 
+class MIE() extends Bundle(){
+  
+  val zero1 = UInt(20.W)
+  val meie = Bool()
+  val heie = Bool()
+  val seie = Bool()
+  val ueie = Bool()
+  val mtie = Bool()
+  val htie = Bool()
+  val stie = Bool()
+  val utie = Bool()
+  val msie = Bool()
+  val hsie = Bool()
+  val ssie = Bool()
+  val usie = Bool()
+
+}
 class MIP() extends Bundle() {
   //val lip = Vec(coreParams.nLocalInterrupts, Bool())
   val lip = UInt(16.W)
@@ -151,10 +170,32 @@ class CSRFileIO() extends Bundle{
     val csr_wr_en = Input(Bool())
     val csr_cmd = Input(UInt(3.W))
 
-    // interupt request
-    val ext_irq_r = Input(Bool()) //external interupt
-    val sft_irq_r = Input(Bool()) //software interupt
-    val tmr_irq_r = Input(Bool()) //timer interupt
+    // interrupt request
+    val ext_irq_r = Input(Bool()) //external interrupt
+    val sft_irq_r = Input(Bool()) //software interrupt
+    val tmr_irq_r = Input(Bool()) //timer interrupt
+
+    // interrupt message
+    val sig = Input(new ControlSignals()) //interrupt instruction message
+    val inst = Input(UInt(32.W))           //interrupt instruction
+    val pc  = Input(UInt(32.W))           //interrupt pc
+    val addr = Input(UInt(32.W))          //interrupt address
+    
+    // Invalid message
+    val instIv = Input(Bool()) //Instruction Invalid
+    val laddrIv = Input(Bool()) //Load Address Invalid
+    val saddrIv = Input(Bool()) //Store Address Invalid
+    val pcIv = Input(Bool())   //PC Invalid
+    
+    // Trap Instruction
+    val isEcall = Input(Bool())
+    val isEbreak = Input(Bool())
+    val isEret = Input(Bool())
+    
+    // Page Fault
+    val iPF = Input(Bool()) //Instruction Page Fault
+    val lPF = Input(Bool()) //Load Page Fault
+    val sPF = Input(Bool()) //Store Page Fault
 
     //csr index
     val csr_idx = Input(UInt(12.W))
@@ -162,27 +203,49 @@ class CSRFileIO() extends Bundle{
     //Read Write data
     val wb_csr_dat = Input(UInt(32.W))
     val read_csr_dat = Output(UInt(32.W))
+
+    val epc = Output(UInt(32.W)) //EPC
+    val expt = Output(Bool()) // Exception Occur
+    val interp = Output(Bool()) // Interrupt Occur
+    val evec = Output(UInt(32.W)) //Exception Handler Entry
 }
 
 class CSRFile() extends Module{
   val io = IO(new CSRFileIO)
 
-  val mstatus = Reg(new MStatus) // 0x300
+  val prv = Reg(UInt(2.W))
+
+  // Status Register
+  val reset_mstatus = Wire(init=new MStatus())
+  reset_mstatus.mpp := PRV.M
+  val mstatus = Reg(init=reset_mstatus) // 0x300
 //val mhartid = Reg(UInt(32.W))  // 0xF14
+  
+  // Interrupt Enable
   val mie = Reg(UInt(32.W))      // 0x304
+  // Interrupt Waiting  
   val mip = Reg(new MIP)         // 0x344
+  // Interrupt Entry Address
   val mtvec = Reg(new MTVEC)    // 0x305
+  // Error Address
   val mtval = Reg(UInt(32.W))
+  // Interrupt Temp Register
   val mscratch = Reg(UInt(32.W)) // 0x340
+  // Interrupt epc
   val mepc = Reg(UInt(32.W))     // 0x341
+  // Interrupt Cause
   val mcause = Reg(UInt(32.W))   // 0x342
+
+  //Machine Cycle
   val mcycle = Reg(UInt(32.W))   // 0xB00
   val mcycleh = Reg(UInt(32.W))  // 0xB80
-  val mtime = Reg(UInt(32.W))
-  val mtimecmp = Reg(UInt(32.W))
-  val msip = Reg(UInt(32.W))
+  
+  //Client Register (For software interrupt and time interrupt)
+  //val mtime = Reg(UInt(32.W))
+  //val mtimecmp = Reg(UInt(32.W))
+  //val msip = Reg(UInt(32.W))
+  //Read CSR
 
-  //Read CSR logic
   when(io.csr_ena & io.csr_rd_en){
     when(io.csr_idx === "h300".U(12.W)){
       io.read_csr_dat := mstatus
@@ -253,8 +316,51 @@ class CSRFile() extends Module{
       mcycleh := wb_dat
     }
     .otherwise{
-      io.read_csr_dat := 0.U(32.W)
+
     }
   }
+  //Counters
+  //cycle := cycle + 1.U
+  //when(cycle.andR) { cycleh := cycleh + 1.U}
+
+  //Exception Handler
+
+  io.expt := io.instIv || io.laddrIv || io.saddrIv || io.pcIv || io.isEcall || io.isEbreak || io.iPF || io.lPF || io.sPF
+  
+  io.evec := mtvec.base << 2
+  io.epc := mepc
+  
+  when(io.expt){
+    mepc := io.pc >> 2 << 2
+    
+    mcause :=   Cat(Cause.Exception, 
+                Mux(io.instIv, Cause.II,
+                Mux(io.laddrIv, Cause.LAM,
+                Mux(io.saddrIv, Cause.SAM,
+                Mux(io.pcIv, Cause.IAM,
+                Mux(io.iPF, Cause.IPF,
+                Mux(io.lPF, Cause.LPF,
+                Mux(io.sPF, Cause.SPF,
+                Mux(io.isEcall, Cause.ECM,
+                Mux(io.isEbreak,     Cause.BP, Cause.II)))))))))
+                )
+
+    mtval :=    Mux(io.instIv, io.inst,
+                Mux(io.laddrIv, io.addr,
+                Mux(io.saddrIv, io.addr,
+                Mux(io.pcIv, io.pc,
+                Mux(io.iPF, io.pc,
+                Mux(io.lPF, io.addr,
+                Mux(io.sPF, io.addr, 0.U(32.W))))))))
+
+    prv := PRV.M
+    mstatus.mpp := prv
+    mstatus.mie := false.B
+    mstatus.mpie := mstatus.mie
+  } .elsewhen(io.isEret){
+    prv := mstatus.mpp
+    mstatus.mie := mstatus.mpie
+  }
+
 
 }
