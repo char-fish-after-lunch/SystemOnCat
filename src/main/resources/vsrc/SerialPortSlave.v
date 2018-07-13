@@ -31,51 +31,76 @@ output reg [7:0] uart_dat_o;
 input wire [7:0] uart_dat_i;
 
 // ------------------ buffer --------------------
-reg [7:0] dat_to_send;
-reg [7:0] dat_received;
+reg [7:0] dat_received[15:0];
+reg [7:0] dat_to_send[15:0];
+reg [3:0] dat_recv_he;
+reg [3:0] dat_recv_ta;
+reg [3:0] dat_send_he;
+reg [3:0] dat_send_ta;
+reg [7:0] dat_next_to_send;
 
 wire stall;
 reg ack;
 
 
 // ------------------ sliding windows ------------
-reg send_phase, o_send_phase; // o for interface
-reg recv_phase, o_recv_phase;
 
+localparam STATE_IDLE = 3'b00,
+    STATE_WRITE = 3'b01,
+    STATE_READ = 3'b10,
+    STATE_ERR = 3'b11,
+    STATE_READ_COUNT = 3'b100;
+
+reg [2:0] state;
+reg [7:0] ans;
 
 initial begin
-    send_phase <= 0;
-    o_send_phase <= 0;
-
-    recv_phase <= 0;
-    o_recv_phase <= 0;
-
-    
     uart_start <= 0;
 
     ack <= 0;
+
+    dat_recv_he <= 0;
+    dat_recv_ta <= 0;
+    dat_send_he <= 0;
+    dat_send_ta <= 0;
+
+
+    state <= 0;
 end
 
-localparam STATE_IDLE = 2'b00,
-    STATE_WRITE = 2'b01,
-    STATE_READ = 2'b10;
-
-reg [1:0] state;
 
 always @(posedge clk_bus) begin
     if(cyc_i && stb_i && !stall) begin
-        if(we_i) begin
-            ack <= 0;
-            o_send_phase = ~o_send_phase;
-            dat_to_send <= dat_i[7:0];
-            state <= STATE_WRITE;
+        if(adr_i[0] == 0) begin
+            if(we_i) begin
+                if(dat_send_ta + 1'b1 == dat_send_he) begin
+                    ack <= 0;
+                    dat_next_to_send <= dat_i[7:0];
+                end else begin
+                    dat_to_send[dat_send_ta] <= dat_i[7:0];
+                    dat_send_ta <= dat_send_ta + 1'b1;
+                    ack <= 1;
+                end
+                state <= STATE_WRITE;
+            end else begin
+                if(dat_recv_he != dat_recv_ta) begin
+                    ans <= dat_received[dat_recv_he];
+                    dat_recv_he <= dat_recv_he + 1;
+                    ack <= 1;
+                end else
+                    ack <= 0;
+                state <= STATE_READ;
+            end
         end else begin
-            if(o_recv_phase != recv_phase) begin
-                o_recv_phase = ~o_recv_phase;
-                ack <= 1;
-            end else
+            if(we_i) begin
                 ack <= 0;
-            state <= STATE_READ;
+                state <= STATE_ERR;
+            end else begin
+                ack <= 1;
+                ans <= {dat_recv_ta - dat_recv_he, 
+                    dat_send_he - dat_send_ta - 1'b1};
+                state <= STATE_READ_COUNT;
+            end
         end
     end else begin
         case(state)
@@ -83,8 +108,9 @@ always @(posedge clk_bus) begin
                 if(ack) begin
                     ack <= 0;
                     state <= STATE_IDLE;
-                end else if(recv_phase != o_recv_phase) begin
-                    o_recv_phase <= recv_phase;
+                end else if(dat_recv_he != dat_recv_ta) begin
+                    dat_recv_he <= dat_recv_he + 1'b1;
+                    ans <= dat_received[dat_recv_he];
                     ack <= 1;
                 end
             end
@@ -92,9 +118,18 @@ always @(posedge clk_bus) begin
                 if(ack) begin
                     ack <= 0;
                     state <= STATE_IDLE;
-                end else if(send_phase == o_send_phase) begin
+                end else if(dat_send_ta + 1'b1 != dat_send_he) begin
+                    dat_to_send[dat_send_ta] <= dat_next_to_send;
+                    dat_send_ta <= dat_send_ta + 1'b1;
                     ack <= 1;
                 end
+            end
+            STATE_READ_COUNT: begin
+                ack <= 0;
+                state <= STATE_IDLE;
+            end
+            STATE_ERR: begin
+                state <= STATE_IDLE;
             end
         endcase
     end
@@ -102,27 +137,25 @@ end
 
 always @(posedge uart_clk) begin
     if(uart_ready) begin
-        dat_received <= uart_dat_i;
-        recv_phase <= ~o_recv_phase;
+        dat_received[dat_recv_ta] <= uart_dat_i;
+        dat_recv_ta <= dat_recv_ta + 1'b1;
     end
 
-    if(state == STATE_WRITE && !ack && !uart_busy) begin
-        if(send_phase != o_send_phase) begin
-            uart_dat_o <= dat_to_send;
+    if(!uart_busy) begin
+        if(dat_send_he != dat_send_ta) begin
+            uart_dat_o <= dat_to_send[dat_send_he];
+            dat_send_he <= dat_send_he + 1'b1;
             uart_start <= 1;
-            send_phase <= o_send_phase;
         end else begin
             uart_start <= 0;
         end
     end
 end
 
-// assign ack = (state == STATE_WRITE && send_phase == o_send_phase) | 
-//         (state == STATE_READ && recv_phase != o_recv_phase);
 assign ack_o = ack;
-assign err_o = 0;
+assign err_o = (state == STATE_ERR);
 assign rty_o = 0;
-assign dat_o = {{24{1'b0}}, dat_received};
+assign dat_o = {{24{1'b0}}, ans};
 
 assign stall = (state != STATE_IDLE) & ~ack;
 assign stall_o = stall;
