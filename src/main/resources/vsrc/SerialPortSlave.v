@@ -34,7 +34,8 @@ input wire [7:0] uart_dat_i;
 reg [7:0] dat_to_send;
 reg [7:0] dat_received;
 
-wire stall, ack;
+wire stall;
+reg ack;
 
 
 // ------------------ sliding windows ------------
@@ -51,6 +52,8 @@ initial begin
 
     
     uart_start <= 0;
+
+    ack <= 0;
 end
 
 localparam STATE_IDLE = 2'b00,
@@ -61,26 +64,36 @@ reg [1:0] state;
 
 always @(posedge clk_bus) begin
     if(cyc_i && stb_i && !stall) begin
-        if(state == STATE_READ)
-            o_recv_phase <= recv_phase;
         if(we_i) begin
+            ack <= 0;
             o_send_phase = ~o_send_phase;
             dat_to_send <= dat_i[7:0];
             state <= STATE_WRITE;
         end else begin
+            if(o_recv_phase != recv_phase) begin
+                o_recv_phase = ~o_recv_phase;
+                ack <= 1;
+            end else
+                ack <= 0;
             state <= STATE_READ;
         end
     end else begin
         case(state)
             STATE_READ: begin
-                if(recv_phase != o_recv_phase) begin
-                    o_recv_phase <= recv_phase;
+                if(ack) begin
+                    ack <= 0;
                     state <= STATE_IDLE;
+                end else if(recv_phase != o_recv_phase) begin
+                    o_recv_phase <= recv_phase;
+                    ack <= 1;
                 end
             end
             STATE_WRITE: begin
-                if(send_phase == o_send_phase) begin
+                if(ack) begin
+                    ack <= 0;
                     state <= STATE_IDLE;
+                end else if(send_phase == o_send_phase) begin
+                    ack <= 1;
                 end
             end
         endcase
@@ -93,19 +106,19 @@ always @(posedge uart_clk) begin
         recv_phase <= ~o_recv_phase;
     end
 
-    if(state == STATE_WRITE) begin
-        if(!uart_busy && send_phase != o_send_phase) begin
+    if(state == STATE_WRITE && !ack && !uart_busy) begin
+        if(send_phase != o_send_phase) begin
             uart_dat_o <= dat_to_send;
             uart_start <= 1;
             send_phase <= o_send_phase;
-        end else if(!uart_busy) begin
+        end else begin
             uart_start <= 0;
         end
     end
 end
 
-assign ack = (state == STATE_WRITE && send_phase == o_send_phase) | 
-        (state == STATE_READ && recv_phase != o_recv_phase);
+// assign ack = (state == STATE_WRITE && send_phase == o_send_phase) | 
+//         (state == STATE_READ && recv_phase != o_recv_phase);
 assign ack_o = ack;
 assign err_o = 0;
 assign rty_o = 0;
