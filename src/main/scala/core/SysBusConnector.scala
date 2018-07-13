@@ -45,7 +45,7 @@ class SysBusConnector() extends Module {
 
     val bus_map = Seq(
         // default -> 0
-        BitPat("b0000000000000000000000000000000?") -> 1.U(1.W)
+        BitPat("b0000000000000000111100000000000?") -> 1.U(1.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(
         ram_slave,
