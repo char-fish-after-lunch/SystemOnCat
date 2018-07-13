@@ -40,9 +40,11 @@ class Datapath() extends Module {
     val wb_reg_pc = Reg(UInt())
 
     val mem_reg_rs2 = Reg(UInt()) // used as store address
+    val dmem_reg = Reg(UInt())
 
     val mem_reg_wdata = Reg(Bits()) // data for write back
     val wb_reg_wdata = Reg(Bits())
+    val wb_reg_wdata_forward = Reg(Bits())
 
     val ex_reg_imme = Reg(UInt()) // 32 bit immediate, sign extended if necessary
 
@@ -92,7 +94,8 @@ class Datapath() extends Module {
     val bypass_sources = IndexedSeq( // has priority !
         (true.B, 0.U, 0.U), // x0 = 0
         (ex_reg_valid && ex_ctrl_sigs.wb_en && !ex_ctrl_sigs.mem, ex_waddr, mem_reg_wdata),
-        (mem_reg_valid && mem_ctrl_sigs.wb_en, mem_waddr, wb_reg_wdata))
+        (mem_reg_valid && mem_ctrl_sigs.wb_en, mem_waddr, wb_reg_wdata),
+        (wb_reg_valid && wb_ctrl_sigs.wb_en, wb_waddr, wb_reg_wdata_forward))
 
     val id_bypass_src = id_raddr.map(raddr => bypass_sources.map(s => s._1 && s._2 === raddr))
     id_exe_data_hazard := ex_reg_valid && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.mem &&
@@ -117,7 +120,8 @@ class Datapath() extends Module {
     val bypass_mux = Seq(
         0.U -> 0.U,
         1.U -> mem_reg_wdata,
-        2.U -> wb_reg_wdata
+        2.U -> wb_reg_wdata,
+        3.U -> wb_reg_wdata_forward
     )
     for (i <- 0 until id_raddr.size) {
         val do_bypass = id_bypass_src(i).reduce(_ || _) // at least one bypass is possible
@@ -180,17 +184,33 @@ class Datapath() extends Module {
         wb_reg_wdata := mem_reg_wdata
     }
 
+    wb_reg_valid := mem_reg_valid
+    dmem_reg := io.dmem.rd_data
+
     reg_write := MuxLookup(wb_ctrl_sigs.wb_sel, wb_reg_wdata, Seq(
-        WB_MEM -> io.dmem.rd_data,
+        WB_MEM -> dmem_reg,
         WB_PC4 -> (wb_reg_pc + 4.U),
         WB_ALU -> wb_reg_wdata
         // WB_CSR -> csr.io.out.zext) 
         )).asUInt
 
-
+    wb_reg_wdata_forward := reg_write
     // temporary init
     // io.debug_devs.leds := alu.io.out
     io.debug_devs.leds := Mux(io.debug_devs.dip_sw.orR, io.imem.inst, alu.io.out)
     io.debug_devs.dpy0 := pc(7, 0)
     io.debug_devs.dpy1 := npc(7, 0)
+
+    printf("inst[%x] -> %x\n", pc, io.imem.inst)
+    printf("alu out: %x\n", alu.io.out)
+        // ex_reg_rs_bypass(i) := do_bypass // bypass is checked at IF, but done in EXE
+        // ex_reg_bypass_src(i) := bypass_src
+        // ex_reg_rdatas(i) := id_rdatas(i)
+    printf("bypass check rs1: src=%d, can bypass=%d\n", ex_reg_bypass_src(0), ex_reg_rs_bypass(0))
+    printf("bypass check rs2: src=%d, can bypass=%d\n", ex_reg_bypass_src(1), ex_reg_rs_bypass(1))
+    printf("bypass sources:\n (%x, %x, %x)\n", mem_reg_wdata, wb_reg_wdata, wb_reg_wdata_forward)
+    printf("bypass source regs: (%x, %x, %x)\n", ex_waddr, mem_waddr, wb_waddr)
+    printf("regs ind: (%x, %x)\n", id_rs1, id_rs2)
+    // 
+    
 }
