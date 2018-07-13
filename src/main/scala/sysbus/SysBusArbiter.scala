@@ -25,7 +25,6 @@ class SysBusArbiter(masters: Seq[SysBusMaster]) extends Module with SysBusMaster
     val master_dat_o = Wire(Vec(mastersN, UInt(32.W)))
     val master_adr_o = Wire(Vec(mastersN, UInt(32.W)))
     val master_cyc_o = Wire(Vec(mastersN, Bool()))
-    val master_lock_o = Wire(Vec(mastersN, Bool()))
     val master_sel_o = Wire(Vec(mastersN, UInt(4.W)))
     val master_stb_o = Wire(Vec(mastersN, Bool()))
     val master_we_o = Wire(Vec(mastersN, Bool()))
@@ -34,7 +33,6 @@ class SysBusArbiter(masters: Seq[SysBusMaster]) extends Module with SysBusMaster
         master_dat_o(i) := masters(i).io.dat_o
         master_adr_o(i) := masters(i).io.adr_o
         master_cyc_o(i) := masters(i).io.cyc_o
-        master_lock_o(i) := masters(i).io.lock_o
         master_sel_o(i) := masters(i).io.sel_o
         master_stb_o(i) := masters(i).io.stb_o
         master_we_o(i) := masters(i).io.we_o
@@ -50,13 +48,13 @@ class SysBusArbiter(masters: Seq[SysBusMaster]) extends Module with SysBusMaster
         masters(i).io.ack_i := Mux(sel, io.ack_i, false.B)
         masters(i).io.err_i := Mux(sel, io.err_i, false.B)
         masters(i).io.rty_i := Mux(sel, io.rty_i, false.B)
+        masters(i).io.stall_i := Mux(sel, io.stall_i, true.B)
     }
     
     
     io.dat_o := master_dat_o(turn)
     io.adr_o := master_adr_o(turn)
     io.cyc_o := master_cyc_o(turn)
-    io.lock_o := master_lock_o(turn)
     io.sel_o := master_sel_o(turn)
     io.stb_o := master_stb_o(turn)
     io.we_o := master_we_o(turn)

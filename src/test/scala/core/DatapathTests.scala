@@ -102,9 +102,14 @@ object DatapathTestSpecs extends TestUtils {
 }
 
 class TestIFetch(testType: => DatapathTest) extends Module with TestUtils {
-    val io = IO(new IFetchIO)
+    val io = IO(new IFetchCoreIO)
     val test_insts = DatapathTestSpecs.test_insts(testType)
     io.inst := VecInit(test_insts)(io.pc(31, 2))
+}
+
+class TestDMem() extends Module with TestUtils {
+    val io = IO(new DMemCoreIO)
+    io.rd_data := 0.U(32.W)
 }
 
 class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTester {
@@ -112,7 +117,7 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
     // TODO: implement me!
     val ctrl = Module(new Control)
     val ifetch = Module(new TestIFetch(testType))
-    val dmem = Module(new DMem)
+    val dmem = Module(new TestDMem())
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs.touch_btn := 0.U(4.W)
     dpath.io.debug_devs.dip_sw := 0.U(32.W)

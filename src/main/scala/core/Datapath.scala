@@ -53,7 +53,7 @@ class Datapath() extends Module {
     val ex_branch_target = Wire(UInt())
 
     val id_exe_data_hazard = Wire(Bool())
-    val pc_stall = id_exe_data_hazard
+    val pc_stall = id_exe_data_hazard || io.imem.locked
     val npc = Mux(ex_branch_taken, ex_branch_target,
         Mux(pc_stall, pc, pc + 4.U))
     pc := npc
@@ -64,10 +64,15 @@ class Datapath() extends Module {
 
     // ---------- ID -----------
     // regs update
-    inst_reg := io.imem.inst
+
     io.ctrl.inst := inst_reg
+    
+    inst_reg := io.imem.inst
     id_reg_pc := pc
-    id_reg_valid := !ex_branch_taken
+
+    id_reg_valid := (!ex_branch_taken && !pc_stall) || id_exe_data_hazard
+    // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
+    // but if pc stalled because of ID/EXE hazard, then ID is also stalled and should be kept
 
     val id_rs1 = inst_reg(19, 15) // rs1
     val id_rs2 = inst_reg(24, 20) // rs2
@@ -91,7 +96,8 @@ class Datapath() extends Module {
 
     val id_bypass_src = id_raddr.map(raddr => bypass_sources.map(s => s._1 && s._2 === raddr))
     id_exe_data_hazard := ex_reg_valid && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.mem &&
-        (ex_waddr === id_rs1 || ex_waddr === id_rs2) // if data loaded from RAM is immediately used, pipeline must be stalled
+        (ex_waddr === id_rs1 || ex_waddr === id_rs2) 
+    // if a data loaded from RAM is immediately used, pipeline must be stalled
 
     // ---------- EXE ----------
     // regs update

@@ -2,7 +2,7 @@ package systemoncat.devices
 
 import chisel3._
 import chisel3.util.HasBlackBoxResource
-import systemoncat.sysbus.SysBusSlave
+import systemoncat.sysbus._
 
 // class RAMBundle extends Bundle{
 //     val addr = Output(UInt(20.W))
@@ -13,6 +13,6 @@ import systemoncat.sysbus.SysBusSlave
 //     val io = IO(new RAMBundle)
 // }
 
-class RAMSlave extends BlackBox with SysBusSlave with HasBlackBoxResource {
-    setResource("/vsrc/RAMSlave.v")
+class RAMSlaveReflector extends Module with SysBusSlave {
+    io.in <> io.out
 }

@@ -13,6 +13,6 @@ class SysBusArbiterTester(br: => SysBusArbiter) extends BasicTester {
 
 class SysBusArbiterTests extends org.scalatest.FlatSpec {
   "SysBusArbiterTests" should "pass" in {
-    assert(TesterDriver execute (() => new SysBusArbiterTester(new SysBusArbiter)))
+    assert(TesterDriver execute (() => new SysBusArbiterTester(new SysBusArbiter(Seq()))))
   }
 }

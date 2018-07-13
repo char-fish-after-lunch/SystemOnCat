@@ -6,6 +6,7 @@ import chisel3.util._
 class IFetchCoreIO extends Bundle {
     val pc = Input(UInt(32.W))
     val inst = Output(UInt(32.W))
+    val locked = Output(Bool())
 }
 
 class IFetchIO extends Bundle {
@@ -21,4 +22,5 @@ class IFetch extends Module {
     io.bus.req.wen := false.B
     io.bus.req.ren := true.B
     io.core.inst := io.bus.res.data_rd
+    io.core.locked := io.bus.res.locked
 }

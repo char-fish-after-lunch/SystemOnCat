@@ -15,6 +15,7 @@ class DebugDevicesIO() extends Bundle {
 
 class CoreIO() extends Bundle {
     val devs = new DebugDevicesIO
+    val ram = Flipped(new SysBusSlaveBundle)
 }
 
 class Core() extends Module {
@@ -24,6 +25,8 @@ class Core() extends Module {
     val ifetch = Module(new IFetch)
     val dmem = Module(new DMem)
     val bus_conn = Module(new SysBusConnector)
+
+    bus_conn.io.external.ram <> io.ram
 
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs <> io.devs
