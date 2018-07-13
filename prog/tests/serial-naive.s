@@ -4,12 +4,8 @@ _start:
 nop
 nop
 nop
-nop
-nop
-nop
-nop
-sw x5, 0(x10)
-nop
+li x10, 0xf000 
+addi x5, x0, 97
 nop
 nop
 nop
@@ -24,3 +20,13 @@ nop
 nop
 nop
 sw x5, 0(x10)
+nop
+nop
+nop
+nop
+sw x5, 0(x10)
+nop
+nop
+nop
+nop
+nop

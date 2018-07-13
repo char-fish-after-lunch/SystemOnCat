@@ -1,4 +1,4 @@
-prog= fibonacci fib-memory serial-simple
+prog= fibonacci fib-memory helloworld serial-naive
 
 ifndef MARCH
 MARCH:=rv32i

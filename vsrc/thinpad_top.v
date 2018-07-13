@@ -168,7 +168,18 @@ SystemOnCat (
     .io_ram_sel_i(io_ram_sel_i),
     .io_ram_stb_i(io_ram_stb_i),
     .io_ram_we_i(io_ram_we_i),
-    .io_ram_stall_o(io_ram_stall_o)
+    .io_ram_stall_o(io_ram_stall_o),
+    .io_serial_dat_i(io_serial_dat_i),
+    .io_serial_dat_o(io_serial_dat_o),
+    .io_serial_ack_o(io_serial_ack_o),
+    .io_serial_adr_i(io_serial_adr_i),
+    .io_serial_cyc_i(io_serial_cyc_i),
+    .io_serial_err_o(io_serial_err_o),
+    .io_serial_rty_o(io_serial_rty_o),
+    .io_serial_sel_i(io_serial_sel_i),
+    .io_serial_stb_i(io_serial_stb_i),
+    .io_serial_we_i(io_serial_we_i),
+    .io_serial_stall_o(io_serial_stall_o)
 );
 
 //module RAMSlave(dat_i, dat_o, ack_o, adr_i, cyc_i,
