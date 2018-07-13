@@ -14,4 +14,5 @@ Vivado项目的构建方式如下：
 
 # 相关说明
 
+安装verilator(`sudo apt-get install verilator`)之后，
 执行`sbt test`可以执行相关模块的仿真测试。

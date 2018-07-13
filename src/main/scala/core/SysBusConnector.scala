@@ -64,20 +64,23 @@ class SysBusConnector() extends Module {
     io.dmem.res.data_rd := 0.U(32.W)
     io.imem.res.data_rd := 0.U(32.W)
     io.dmem.res.locked := false.B
-    io.imem.res.locked := false.B
 
-    when (dmem_en && io.dmem.req.ren) {
+    val dmem_reg_en = Reg(Bool())
+    val imem_reg_en = Reg(Bool())
+
+    io.imem.res.locked := dmem_reg_en
+
+    dmem_reg_en := dmem_en
+    imem_reg_en := imem_en
+
+    when (dmem_reg_en) {
         io.dmem.res.data_rd := bus.io.out.dat_o
         io.imem.res.data_rd := 0.U(32.W)
-        io.dmem.res.locked := false.B
-        io.imem.res.locked := true.B
     }
 
-    when (imem_en && !dmem_en) {
+    when (imem_reg_en && !dmem_reg_en) {
         io.dmem.res.data_rd := 0.U(32.W)
         io.imem.res.data_rd := bus.io.out.dat_o
-        io.dmem.res.locked := false.B
-        io.imem.res.locked := false.B
     }
 
 // class SysBusSlaveBundle extends Bundle{

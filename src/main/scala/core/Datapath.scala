@@ -60,7 +60,7 @@ class Datapath() extends Module {
     val inst_reg = RegInit(NOP) // instruction in IF
 
     // ---------- IF -----------
-    io.imem.pc := pc
+    io.imem.pc := npc
 
     // ---------- ID -----------
     // regs update
@@ -166,11 +166,11 @@ class Datapath() extends Module {
 
     mem_reg_valid := ex_reg_valid // TODO: check valid (stall logic related)
 
-    io.dmem.wr_data := mem_reg_rs2
-    io.dmem.addr := mem_reg_wdata
-    io.dmem.wr_en := mem_ctrl_sigs.mem && isWrite(mem_ctrl_sigs.mem_cmd)
-    io.dmem.rd_en := mem_ctrl_sigs.mem && isRead(mem_ctrl_sigs.mem_cmd)
-    io.dmem.mem_type := mem_ctrl_sigs.mem_type
+    io.dmem.wr_data := ex_rs(1)
+    io.dmem.addr := alu.io.out
+    io.dmem.wr_en := ex_reg_valid && ex_ctrl_sigs.mem && isWrite(ex_ctrl_sigs.mem_cmd)
+    io.dmem.rd_en := ex_reg_valid && ex_ctrl_sigs.mem && isRead(ex_ctrl_sigs.mem_cmd)
+    io.dmem.mem_type := ex_ctrl_sigs.mem_type
 
     // ---------- WB -----------
     when (mem_reg_valid) {
@@ -189,7 +189,8 @@ class Datapath() extends Module {
 
 
     // temporary init
-    io.debug_devs.leds := alu.io.out
+    // io.debug_devs.leds := alu.io.out
+    io.debug_devs.leds := Mux(io.debug_devs.dip_sw.orR, io.imem.inst, alu.io.out)
     io.debug_devs.dpy0 := pc(7, 0)
-    io.debug_devs.dpy1 := reg_write(7, 0)
+    io.debug_devs.dpy1 := npc(7, 0)
 }

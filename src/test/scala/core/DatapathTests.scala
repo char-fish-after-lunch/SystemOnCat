@@ -78,7 +78,7 @@ object DatapathTestSpecs extends TestUtils {
         RU(Funct3.ADD, 1, 1, 2), // ADD  x1, x1, x2  # x1 <- x1 + x2 :loop
         RU(Funct3.ADD, 2, 1, 2), // ADD  x2, x1, x2  # x2 <- x1 + x2
         I(Funct3.ADD, 10, 10, 1), // ADDI x10, x10, 1  # x10 += 1
-        B(Funct3.BNE, 10, 3, -12), // BNE  x10, x3, 32   # if (x3 != x10) goto :loop
+        B(Funct3.BNE, 10, 3, -12), // BNE  x10, x3, -12   # if (x3 != x10) goto :loop
         NOP,NOP,NOP,NOP,NOP
     )
 
@@ -105,6 +105,7 @@ class TestIFetch(testType: => DatapathTest) extends Module with TestUtils {
     val io = IO(new IFetchCoreIO)
     val test_insts = DatapathTestSpecs.test_insts(testType)
     io.inst := VecInit(test_insts)(io.pc(31, 2))
+    io.locked := false.B
 }
 
 class TestDMem() extends Module with TestUtils {
