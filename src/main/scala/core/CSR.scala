@@ -207,9 +207,9 @@ class CSRFileIO() extends Bundle{
     val wb_csr_dat = Input(UInt(32.W))
     val read_csr_dat = Output(UInt(32.W))
 
-    val epc = Output(UInt(32.W)) //EPC
-    val expt = Output(Bool()) // Exception Occur
-    val interp = Output(Bool()) // Interrupt Occur
+    val epc = Output(UInt(32.W))  //EPC
+    val expt = Output(Bool())     // Exception Occur
+    val interp = Output(Bool())   // Interrupt Occur
     val evec = Output(UInt(32.W)) //Exception Handler Entry
 }
 
@@ -325,9 +325,7 @@ class CSRFile() extends Module{
   //Counters
   //cycle := cycle + 1.U
   //when(cycle.andR) { cycleh := cycleh + 1.U}
-
   //Exception Handler
-
   io.expt := io.instIv || io.laddrIv || io.saddrIv || io.pcIv || io.isEcall || io.isEbreak || io.iPF || io.lPF || io.sPF
   
   io.evec := mtvec.base << 2
@@ -368,14 +366,15 @@ class CSRFile() extends Module{
   //Interrupt Handler
   val next_pc = Mux((io.sig.jal | io.sig.jalr | io.sig.branch), (io.pc >> 2 << 2), (io.pc >> 2 << 2) + 4.U(32.W))
 
-  when(io.ext_irq_r){ mip.meip := true.B} .otherwise {mip.meip := false.B}
-  when(io.tmr_irq_r){ mip.mtip := true.B} .otherwise {mip.mtip := false.B}
-  when(io.sft_irq_r){ mip.msip := true.B} .otherwise {mip.msip := false.B}
+  when(io.ext_irq_r){ mip.meip := true.B} 
+  when(io.tmr_irq_r){ mip.mtip := true.B} 
+  when(io.sft_irq_r){ mip.msip := true.B} 
   
   when(mip.meip){ //Extenral Interrupt Handler
     when(mstatus.mie & mie.meie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MEI)
+      when(~io.ext_irq_r) {mip.meip := false.B}
       
       prv := PRV.M
       mstatus.mpp := prv
@@ -386,6 +385,7 @@ class CSRFile() extends Module{
     when(mstatus.mie & mie.msie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MSI)
+      when(~io.tmr_irq_r) {mip.mtip := false.B}
       
       prv := PRV.M
       mstatus.mpp := prv
@@ -396,6 +396,7 @@ class CSRFile() extends Module{
     when(mstatus.mie & mie.mtie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MTI)
+      when(~io.sft_irq_r) {mip.msip := false.B}
       
       prv := PRV.M
       mstatus.mpp := prv
