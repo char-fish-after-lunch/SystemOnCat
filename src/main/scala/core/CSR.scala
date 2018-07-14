@@ -240,8 +240,8 @@ class CSRFile() extends Module{
   val mcause = Reg(UInt(32.W))   // 0x342
 
   //Machine Cycle
-  val mcycle = Reg(UInt(32.W))   // 0xB00
-  val mcycleh = Reg(UInt(32.W))  // 0xB80
+  //val mcycle = Reg(UInt(32.W))   // 0xB00
+  //val mcycleh = Reg(UInt(32.W))  // 0xB80
   
   //Client Register (For software interrupt and time interrupt)
   //val mtime = Reg(UInt(32.W))
@@ -288,9 +288,10 @@ class CSRFile() extends Module{
     CSR.C -> (io.read_csr_dat & ~io.wb_csr_dat)
   ))  
 
+  val write_zero = (io.inst(19,15) === 0.U(5.W))
 
   //Write CSR logic
-  when(io.csr_ena & io.csr_wr_en){
+  when(io.csr_ena & io.csr_wr_en & ~write_zero){
     when(io.csr_idx === "h300".U(12.W)){
       mstatus := wb_dat
     } 
@@ -325,13 +326,19 @@ class CSRFile() extends Module{
   //Counters
   //cycle := cycle + 1.U
   //when(cycle.andR) { cycleh := cycleh + 1.U}
-  //Exception Handler
+  //Exception Request
   io.expt := io.instIv || io.laddrIv || io.saddrIv || io.pcIv || io.isEcall || io.isEbreak || io.iPF || io.lPF || io.sPF
-  
   io.evec := mtvec.base << 2
   io.epc := mepc
   
-  when(io.expt){
+  //Interrupt Request
+  val next_pc = Mux((io.sig.jal | io.sig.jalr | io.sig.branch), (io.pc >> 2 << 2), (io.pc >> 2 << 2) + 4.U(32.W))
+  when(io.ext_irq_r){ mip.meip := true.B} .otherwise { mip.meip := false.B }
+  when(io.tmr_irq_r){ mip.mtip := true.B} .otherwise { mip.mtip := false.B }
+  when(io.sft_irq_r){ mip.msip := true.B} .otherwise { mip.msip := false.B }
+    
+  //Handler
+  when(io.expt){ //Exception Handler
     mepc := io.pc >> 2 << 2
     
     mcause :=   Cat(Cause.Exception, 
@@ -358,23 +365,14 @@ class CSRFile() extends Module{
     mstatus.mpp := prv
     mstatus.mie := false.B
     mstatus.mpie := mstatus.mie
-  } .elsewhen(io.isEret){
+  } .elsewhen(io.isEret) { //Eret Handler
     prv := mstatus.mpp
     mstatus.mie := mstatus.mpie
-  }
-
-  //Interrupt Handler
-  val next_pc = Mux((io.sig.jal | io.sig.jalr | io.sig.branch), (io.pc >> 2 << 2), (io.pc >> 2 << 2) + 4.U(32.W))
-
-  when(io.ext_irq_r){ mip.meip := true.B} 
-  when(io.tmr_irq_r){ mip.mtip := true.B} 
-  when(io.sft_irq_r){ mip.msip := true.B} 
-  
-  when(mip.meip){ //Extenral Interrupt Handler
+  } .elsewhen(mip.meip){ //Extenral Interrupt Handler
     when(mstatus.mie & mie.meie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MEI)
-      when(~io.ext_irq_r) {mip.meip := false.B}
+      //when(~io.ext_irq_r) {mip.meip := false.B}
       
       prv := PRV.M
       mstatus.mpp := prv
@@ -385,7 +383,7 @@ class CSRFile() extends Module{
     when(mstatus.mie & mie.msie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MSI)
-      when(~io.tmr_irq_r) {mip.mtip := false.B}
+      //when(~io.tmr_irq_r) {mip.mtip := false.B}
       
       prv := PRV.M
       mstatus.mpp := prv
@@ -396,7 +394,7 @@ class CSRFile() extends Module{
     when(mstatus.mie & mie.mtie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MTI)
-      when(~io.sft_irq_r) {mip.msip := false.B}
+      //when(~io.sft_irq_r) {mip.msip := false.B}
       
       prv := PRV.M
       mstatus.mpp := prv
