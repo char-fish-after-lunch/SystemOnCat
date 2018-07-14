@@ -88,9 +88,9 @@ module thinpad_top(
 
 //直连串口接收发送演示，从直连串口收到的数据再发送出去
 wire [7:0] ext_uart_rx;
-reg  [7:0] ext_uart_buffer, ext_uart_tx;
+wire [7:0] ext_uart_tx;
 wire ext_uart_ready, ext_uart_busy;
-reg ext_uart_start, ext_uart_avai;
+wire ext_uart_start;
 
 async_receiver #(.ClkFrequency(50000000),.Baud(9600)) //接收模块，9600无检验位
     ext_uart_r(
@@ -100,23 +100,6 @@ async_receiver #(.ClkFrequency(50000000),.Baud(9600)) //接收模块，9600无�
         .RxD_clear(ext_uart_ready),       //清除接收标志
         .RxD_data(ext_uart_rx)             //接收到的一字节数据
     );
-    
-always @(posedge clk_50M) begin //接收到缓冲区ext_uart_buffer
-    if(ext_uart_ready)begin
-        ext_uart_buffer <= ext_uart_rx;
-        ext_uart_avai <= 1;
-    end else if(!ext_uart_busy && ext_uart_avai)begin 
-        ext_uart_avai <= 0;
-    end
-end
-always @(posedge clk_50M) begin //将缓冲区ext_uart_buffer发送出去
-    if(!ext_uart_busy && ext_uart_avai)begin 
-        ext_uart_tx <= ext_uart_buffer;
-        ext_uart_start <= 1;
-    end else begin 
-        ext_uart_start <= 0;
-    end
-end
 
 async_transmitter #(.ClkFrequency(50000000),.Baud(9600)) //发送模块，9600无检验位
     ext_uart_t(
@@ -155,6 +138,18 @@ wire io_ram_stb_i;
 wire io_ram_we_i;
 wire io_ram_stall_o;
 
+wire [31:0] io_serial_dat_i;
+wire [31:0] io_serial_dat_o;
+wire io_serial_ack_o;
+wire [31:0] io_serial_adr_i;
+wire io_serial_cyc_i;
+wire io_serial_err_o;
+wire io_serial_rty_o;
+wire [3:0] io_serial_sel_i;
+wire io_serial_stb_i;
+wire io_serial_we_i;
+wire io_serial_stall_o;
+
 SystemOnCat (
     .clock(clock_btn),
     .reset(reset_btn),
@@ -173,7 +168,18 @@ SystemOnCat (
     .io_ram_sel_i(io_ram_sel_i),
     .io_ram_stb_i(io_ram_stb_i),
     .io_ram_we_i(io_ram_we_i),
-    .io_ram_stall_o(io_ram_stall_o)
+    .io_ram_stall_o(io_ram_stall_o),
+    .io_serial_dat_i(io_serial_dat_i),
+    .io_serial_dat_o(io_serial_dat_o),
+    .io_serial_ack_o(io_serial_ack_o),
+    .io_serial_adr_i(io_serial_adr_i),
+    .io_serial_cyc_i(io_serial_cyc_i),
+    .io_serial_err_o(io_serial_err_o),
+    .io_serial_rty_o(io_serial_rty_o),
+    .io_serial_sel_i(io_serial_sel_i),
+    .io_serial_stb_i(io_serial_stb_i),
+    .io_serial_we_i(io_serial_we_i),
+    .io_serial_stall_o(io_serial_stall_o)
 );
 
 //module RAMSlave(dat_i, dat_o, ack_o, adr_i, cyc_i,
@@ -199,6 +205,28 @@ RAMSlave(
     .sram_oe(base_ram_oe_n),
     .sram_we(base_ram_we_n),
     .sram_be(base_ram_be_n),
+    .clk_bus(clock_btn),
+    .rst_bus(reset_btn)
+);
+
+SerialPortSlave(
+    .dat_i(io_serial_dat_i),
+    .dat_o(io_serial_dat_o),
+    .ack_o(io_serial_ack_o),
+    .adr_i(io_serial_adr_i),
+    .cyc_i(io_serial_cyc_i),
+    .err_o(io_serial_err_o),
+    .rty_o(io_serial_rty_o),
+    .sel_i(io_serial_sel_i),
+    .stb_i(io_serial_stb_i),
+    .we_i(io_serial_we_i),
+    .stall_o(io_serial_stall_o),
+    .uart_clk(clk_50M),
+    .uart_busy(ext_uart_busy),
+    .uart_ready(ext_uart_ready),
+    .uart_start(ext_uart_start),
+    .uart_dat_i(ext_uart_rx),
+    .uart_dat_o(ext_uart_tx),
     .clk_bus(clock_btn),
     .rst_bus(reset_btn)
 );

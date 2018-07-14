@@ -5,9 +5,9 @@ import chisel3.util._
 import chisel3.testers._
 
 class IFetchTester(ifetch: => IFetch) extends BasicTester {
-    val fetch = Module(ifetch)
-    // TODO: implement me!
-    fetch.io.core.pc := 0.U(32.W)
+    // val fetch = Module(ifetch)
+    // // TODO: implement me!
+    // fetch.io.core.pc := 0.U(32.W)
     assert(1 == 1)
     stop()
 }
