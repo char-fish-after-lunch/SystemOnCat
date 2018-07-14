@@ -66,7 +66,7 @@ class MStatus extends Bundle{
   
   val mpp = UInt(2.W) //previous mode
   val hpp = UInt(2.W)
-  val spp = UInt(2.W)
+  val spp = UInt(1.W)
   
   val mpie = Bool() //previous mie (Saved status)
   val hpie = Bool()
@@ -219,7 +219,7 @@ class CSRFile() extends Module{
   val prv = Reg(UInt(2.W))
 
   // Status Register
-  val reset_mstatus = Wire(init=new MStatus())
+  val reset_mstatus = Wire(init=Wire(new MStatus()))
   reset_mstatus.mpp := PRV.M
   val mstatus = Reg(init=reset_mstatus) // 0x300
 //val mhartid = Reg(UInt(32.W))  // 0xF14

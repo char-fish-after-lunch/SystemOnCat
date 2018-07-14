@@ -98,8 +98,8 @@ object Decoder {
         FENCE->     List(N,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,N,MOP_X, MEM_X, N,WB_X,  CSR.N,Y,N,Y,N,N,N),
         FENCE_I->   List(N,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,Y,MOP_FL,MEM_X, N,WB_X,  CSR.N,Y,Y,N,N,N,N),
 
-        SCALL->     List(X,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,N,MOP_X, MEM_X, N,WB_X,  CSR.I,Y,N,N,N,N,N),
-        SBREAK->    List(X,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,N,MOP_X, MEM_X, N,WB_X,  CSR.I,Y,N,N,N,N,N),
+        ECALL->     List(X,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,N,MOP_X, MEM_X, N,WB_X,  CSR.I,Y,N,N,N,N,N),
+        EBREAK->    List(X,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,N,MOP_X, MEM_X, N,WB_X,  CSR.I,Y,N,N,N,N,N),
         MRET->      List(X,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,N,MOP_X, MEM_X, N,WB_X,  CSR.I,Y,N,N,N,N,N),
         WFI->       List(X,N,A1_X,   A2_X,   IMM_X,ALU_OP_X,   N,N,N,MOP_X, MEM_X, N,WB_X,  CSR.I,Y,N,N,N,N,N),
         CSRRW->     List(Y,N,A1_RS1, A2_ZERO,IMM_X,ALU_OP_ADD, N,N,N,MOP_X, MEM_X, Y,WB_CSR,CSR.W,Y,N,N,N,N,N),
