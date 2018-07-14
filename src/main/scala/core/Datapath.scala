@@ -234,7 +234,7 @@ class Datapath() extends Module {
     // val expt = Output(Bool())     // Exception Occur
     // val evec = Output(UInt(32.W)) //Exception Handler Entry
 
-    val mem_has_interrupt = csr.io.interp
+    val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
     mem_interp := mem_has_exception || mem_has_exception
     mem_eret := mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET

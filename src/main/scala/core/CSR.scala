@@ -210,7 +210,7 @@ class CSRFileIO() extends Bundle{
 
     val epc = Output(UInt(32.W))  //EPC
     val expt = Output(Bool())     // Exception Occur
-    val interp = Output(Bool())   // Interrupt Occur
+    val interrupt = Output(Bool())   // Interrupt Occur
     val evec = Output(UInt(32.W)) //Exception Handler Entry
 }
 
@@ -313,7 +313,7 @@ class CSRFile() extends Module{
   io.expt := io.instIv || io.laddrIv || io.saddrIv || io.pcIv || io.isEcall || io.isEbreak || io.iPF || io.lPF || io.sPF
   io.evec := mtvec.base << 2
   io.epc := mepc
-  
+  io.interrupt := false.B
   //Interrupt Request
   val next_pc = Mux((io.sig.jal | io.sig.jalr | io.sig.branch), (io.pc >> 2 << 2), (io.pc >> 2 << 2) + 4.U(32.W))
   when(io.ext_irq_r){ mip.meip := true.B} .otherwise { mip.meip := false.B }
@@ -356,7 +356,7 @@ class CSRFile() extends Module{
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MEI)
       //when(~io.ext_irq_r) {mip.meip := false.B}
-      
+      io.interrupt := true.B
       prv := PRV.M
       mstatus.mpp := prv
       mstatus.mie := false.B
@@ -367,7 +367,7 @@ class CSRFile() extends Module{
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MSI)
       //when(~io.tmr_irq_r) {mip.mtip := false.B}
-      
+      io.interrupt := true.B
       prv := PRV.M
       mstatus.mpp := prv
       mstatus.mie := false.B
@@ -378,7 +378,7 @@ class CSRFile() extends Module{
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MTI)
       //when(~io.sft_irq_r) {mip.msip := false.B}
-      
+      io.interrupt := true.B
       prv := PRV.M
       mstatus.mpp := prv
       mstatus.mie := false.B

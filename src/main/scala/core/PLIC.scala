@@ -83,6 +83,7 @@ class PLIC() extends Module{
 		net_gate := true.B
 	}
 
+	
 	when(keyboard_ip){
 		//Notify Core 1
 		Core1IR := InterruptID.KeyboardID
