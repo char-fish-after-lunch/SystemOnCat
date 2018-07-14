@@ -1,8 +1,13 @@
 package systemoncat.core
+
+import systemoncat.sysbus.SysBusSlaveBundle
+
 import chisel3._
 import chisel3.util._
 import chisel3.testers._
-object CliAddr{ //Should be different for each core
+
+
+object CliAddr{
 	val msip_addr = "h2000000".U(32.W)
 	val cmph_addr = "h2004004".U(32.W)
 	val cmpl_addr = "h2004000".U(32.W)
@@ -11,17 +16,8 @@ object CliAddr{ //Should be different for each core
 }
 
 class ClientIO() extends Bundle{
-	// commands
-	val cli_en = Input(Bool())
-	val cli_rd_en = Input(Bool())
-	val cli_wr_en = Input(Bool())
-	
-	// Selection Address
-	val addr = Input(UInt(32.W))
-
-	// Read Write Data
-	val read_cli_dat = Output(UInt(32.W))
-	val wb_cli_dat = Output(UInt(32.W))
+	// bus interface
+	val bus = new SysBusSlaveBundle()
 
 	//Interrupt
 	val sft_irq_r = Output(Bool())
@@ -39,10 +35,27 @@ class Client() extends Module{
 	val cmph = Reg(UInt(32.W))
 	val tmel = Reg(UInt(32.W))
 	val tmeh = Reg(UInt(32.W))
+	val state = RegInit(Bool(), false.B)
+	val ans = Reg(UInt(32.W))
 
-	//Time Add
-	tmel := tmel + 1.U
-	when(tmel.andR){tmeh := tmeh + 1.U}
+	val req = io.bus.cyc_i && io.bus.stb_i
+	val we = req && io.bus.we_i
+
+	state := req
+
+	cmpl := Mux(we && io.bus.adr_i(4,2) === 0.U, io.bus.dat_i, cmpl)
+	cmph := Mux(we && io.bus.adr_i(4,2) === 1.U, io.bus.dat_i, cmph)
+	tmel := Mux(we && io.bus.adr_i(4,2) === 2.U, io.bus.dat_i, tmel + 1.U)
+	tmeh := Mux(we && io.bus.adr_i(4,2) === 3.U, io.bus.dat_i, Mux(tmel.andR, tmeh + 1.U, tmeh))
+	msip := Mux(we && io.bus.adr_i(4,2) === 4.U, io.bus.dat_i, msip)
+
+	ans := MuxLookup(io.bus.adr_i(4,2), 0.U, Seq(
+		0.U -> cmpl,
+		1.U -> cmph,
+		2.U -> tmel,
+		3.U -> tmeh,
+		4.U -> msip
+	))
 
 	//Time Interrupt Generate
 	val cmp = Cat(cmph, cmpl)
@@ -52,47 +65,9 @@ class Client() extends Module{
 	//Software Interrupt Generate
 	when(msip === 1.U(32.W)){ io.sft_irq_r := true.B } .otherwise { io.sft_irq_r := false.B }
 
-	//Read Logic
-	when(io.cli_en & io.cli_rd_en){
-		when(io.addr === CliAddr.msip_addr){
-			io.read_cli_dat := msip
-		}
-		.elsewhen(io.addr === CliAddr.cmph_addr){
-			io.read_cli_dat := cmph
-		}
-		.elsewhen(io.addr === CliAddr.cmpl_addr){
-			io.read_cli_dat := cmpl
-		}
-		.elsewhen(io.addr === CliAddr.tmeh_addr){
-			io.read_cli_dat := tmeh
-		}
-		.elsewhen(io.addr === CliAddr.tmel_addr){
-			io.read_cli_dat := tmel
-		}
-		.otherwise{
-			io.read_cli_dat := 0.U(32.W)
-		}
-	}
-
-	//Write Logic
-	when(io.cli_en & io.cli_wr_en){
-		when(io.addr === CliAddr.msip_addr){
-			msip := io.wb_cli_dat
-		}
-		.elsewhen(io.addr === CliAddr.cmph_addr){
-			cmph := io.wb_cli_dat
-		}
-		.elsewhen(io.addr === CliAddr.cmpl_addr){
-			cmpl := io.wb_cli_dat
-		}
-		.elsewhen(io.addr === CliAddr.tmeh_addr){
-			tmeh := io.wb_cli_dat
-		}
-		.elsewhen(io.addr === CliAddr.tmel_addr){
-			tmel := io.wb_cli_dat
-		}
-		.otherwise{
-
-		}
-	}
+	io.bus.stall_o := false.B
+	io.bus.ack_o := state
+	io.bus.err_o := false.B
+	io.bus.rty_o := false.B
+	io.bus.dat_o := ans
 }
