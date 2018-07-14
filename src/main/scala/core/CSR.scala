@@ -220,9 +220,9 @@ class CSRFile() extends Module{
   val prv = Reg(UInt(2.W))
 
   // Status Register
-  val reset_mstatus = Wire(init=new MStatus().fromBits(0.U(32.W)))
+  val reset_mstatus = 0.U(32.W).asTypeOf(new MStatus())
   reset_mstatus.mpp := PRV.M
-  val mstatus = Reg(init=reset_mstatus) // 0x300
+  val mstatus = RegInit(reset_mstatus) // 0x300
 //val mhartid = Reg(UInt(32.W))  // 0xF14
   
   // Interrupt Enable
@@ -230,7 +230,7 @@ class CSRFile() extends Module{
   // Interrupt Waiting  
   val mip = Reg(new MIP)         // 0x344
   // Interrupt Entry Address
-  val mtvec = RegInit(new MTVEC().fromBits(0.U(32.W)))    // 0x305
+  val mtvec = RegInit(0.U(32.W).asTypeOf(new MTVEC()))    // 0x305
   // Error Address
   val mtval = Reg(UInt(32.W))
   // Interrupt Temp Register
@@ -276,16 +276,16 @@ class CSRFile() extends Module{
   //Write CSR logic
   when(io.csr_ena & io.csr_wr_en & ~write_zero){
     when(io.csr_idx === "h300".U(12.W)){
-      mstatus := new MStatus().fromBits(wb_dat)
+      mstatus := wb_dat.asTypeOf(new MStatus())
     } 
     .elsewhen(io.csr_idx === "h304".U(12.W)){
-      mie := new MIE().fromBits(wb_dat)
+      mie := wb_dat.asTypeOf(new MIE())
     } 
     //.elsewhen(io.csr_idx === "h344".U(12.W)){ MIP is read only
       //mip := wb_dat
     //} 
     .elsewhen(io.csr_idx === "h305".U(12.W)){
-      mtvec := new MTVEC().fromBits(wb_dat)
+      mtvec := wb_dat.asTypeOf(new MTVEC())
     } 
     .elsewhen(io.csr_idx === "h340".U(12.W)){
       mscratch := wb_dat
