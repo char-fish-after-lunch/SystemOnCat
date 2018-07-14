@@ -17,12 +17,12 @@ class SysBusSlaveBundle extends Bundle {
     val stall_o = Output(Bool())
 }
 
-class SysBusSlaveIO extends Bundle {
+class SysBusSlaveIO(in_bundle: Bundle) extends Bundle {
     val out = new SysBusSlaveBundle
-    val in = Flipped(new SysBusSlaveBundle)
+    val in = in_bundle
 }
 
-trait SysBusSlave extends BaseModule {
-    val io = IO(new SysBusSlaveIO)
+class SysBusSlave(in_bundle: Bundle) extends Module {
+    val io = IO(new SysBusSlaveIO(in_bundle))
 }
 

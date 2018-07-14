@@ -8,6 +8,7 @@ class DatapathIO() extends Bundle {
     val debug_devs = new DebugDevicesIO()
     val imem = Flipped(new IFetchCoreIO)
     val dmem = Flipped(new DMemCoreIO)
+    val irq_client = Flipped(new ClientIrqIO)
 }
 
 class Datapath() extends Module {
@@ -158,7 +159,7 @@ class Datapath() extends Module {
     ex_branch_taken := (ex_reg_valid && alu.io.cmp_out && ex_ctrl_sigs.branch) || 
         ex_ctrl_sigs.jal || ex_ctrl_sigs.jalr
 
-    ex_branch_target := Mux(ex_ctrl_sigs.jal || ex_ctrl_sigs.jalr,
+    ex_branch_target := Mux(ex_ctrl_sigs.jalr,
             alu.io.out, ex_reg_pc + ex_reg_imme)
 
     // ---------- MEM ----------
@@ -204,8 +205,8 @@ class Datapath() extends Module {
     csr.io.csr_idx := wb_reg_inst(31,20)
 
     csr.io.ext_irq_r := false.B
-    csr.io.sft_irq_r := false.B
-    csr.io.tmr_irq_r := false.B
+    csr.io.sft_irq_r := io.irq_client.sft_irq_r
+    csr.io.tmr_irq_r := io.irq_client.tmr_irq_r
 
     csr.io.csr_cmd := Mux(wb_reg_valid, wb_ctrl_sigs.csr_cmd, CSR.N)
 
@@ -234,7 +235,7 @@ class Datapath() extends Module {
     // val expt = Output(Bool())     // Exception Occur
     // val evec = Output(UInt(32.W)) //Exception Handler Entry
 
-    val mem_has_interrupt = csr.io.interrupt
+    val mem_has_interrupt = csr.io.interrupt || io.irq_client.sft_irq_r
     val mem_has_exception = csr.io.expt
     mem_interp := mem_has_exception || mem_has_exception
     mem_eret := mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET
