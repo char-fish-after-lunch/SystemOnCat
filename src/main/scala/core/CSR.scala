@@ -113,6 +113,7 @@ class MIE() extends Bundle(){
   val usie = Bool()
 
 }
+
 class MIP() extends Bundle() {
   //val lip = Vec(coreParams.nLocalInterrupts, Bool())
   val lip = UInt(16.W)
@@ -219,7 +220,7 @@ class CSRFile() extends Module{
   val prv = Reg(UInt(2.W))
 
   // Status Register
-  val reset_mstatus = Wire(init=Wire(new MStatus()))
+  val reset_mstatus = Wire(init=new MStatus().fromBits(0.U(32.W)))
   reset_mstatus.mpp := PRV.M
   val mstatus = Reg(init=reset_mstatus) // 0x300
 //val mhartid = Reg(UInt(32.W))  // 0xF14
@@ -229,7 +230,7 @@ class CSRFile() extends Module{
   // Interrupt Waiting  
   val mip = Reg(new MIP)         // 0x344
   // Interrupt Entry Address
-  val mtvec = Reg(new MTVEC)    // 0x305
+  val mtvec = RegInit(new MTVEC().fromBits(0.U(32.W)))    // 0x305
   // Error Address
   val mtval = Reg(UInt(32.W))
   // Interrupt Temp Register
@@ -249,37 +250,19 @@ class CSRFile() extends Module{
   //val msip = Reg(UInt(32.W))
   //Read CSR
 
+  io.read_csr_dat := 0.U(32.W)
   when(io.csr_ena & io.csr_rd_en){
-    when(io.csr_idx === "h300".U(12.W)){
-      io.read_csr_dat := mstatus
-    } 
-    .elsewhen(io.csr_idx === "h304".U(12.W)){
-      io.read_csr_dat := mie
-    } 
-    .elsewhen(io.csr_idx === "h344".U(12.W)){
-      io.read_csr_dat := mip
-    } 
-    .elsewhen(io.csr_idx === "h305".U(12.W)){
-      io.read_csr_dat := mtvec
-    } 
-    .elsewhen(io.csr_idx === "h340".U(12.W)){
-      io.read_csr_dat := mscratch
-    } 
-    .elsewhen(io.csr_idx === "h341".U(12.W)){
-      io.read_csr_dat := mepc
-    } 
-    .elsewhen(io.csr_idx === "h342".U(12.W)){
-      io.read_csr_dat := mcause
-    } 
-    .elsewhen(io.csr_idx === "hb00".U(12.W)){
-      io.read_csr_dat := mcycle
-    } 
-    .elsewhen(io.csr_idx === "hb80".U(12.W)){
-      io.read_csr_dat := mcycleh
-    }
-    .otherwise{
-      io.read_csr_dat := 0.U(32.W)
-    }
+    io.read_csr_dat := MuxLookup(io.csr_idx, 0.U(32.W), Seq(
+        "h300".U(12.W) -> mstatus.asUInt(),
+        "h304".U(12.W) -> mie.asUInt(),
+        "h344".U(12.W) -> mip.asUInt(),
+        "h305".U(12.W) -> mtvec.asUInt(),
+        "h340".U(12.W) -> mscratch,
+        "h341".U(12.W) -> mepc,
+        "h342".U(12.W) -> mcause
+        // "hb00".U(12.W) -> mcycle,
+        // "hb80".U(12.W) -> mcycleh,
+    ))
   }
 
   val wb_dat = MuxLookup(io.csr_cmd, 0.U, Seq(
@@ -293,16 +276,16 @@ class CSRFile() extends Module{
   //Write CSR logic
   when(io.csr_ena & io.csr_wr_en & ~write_zero){
     when(io.csr_idx === "h300".U(12.W)){
-      mstatus := wb_dat
+      mstatus := new MStatus().fromBits(wb_dat)
     } 
     .elsewhen(io.csr_idx === "h304".U(12.W)){
-      mie := wb_dat
+      mie := new MIE().fromBits(wb_dat)
     } 
     //.elsewhen(io.csr_idx === "h344".U(12.W)){ MIP is read only
       //mip := wb_dat
     //} 
     .elsewhen(io.csr_idx === "h305".U(12.W)){
-      mtvec := wb_dat
+      mtvec := new MTVEC().fromBits(wb_dat)
     } 
     .elsewhen(io.csr_idx === "h340".U(12.W)){
       mscratch := wb_dat
@@ -313,12 +296,12 @@ class CSRFile() extends Module{
     .elsewhen(io.csr_idx === "h342".U(12.W)){
       mcause := wb_dat
     } 
-    .elsewhen(io.csr_idx === "hb00".U(12.W)){
-      mcycle := wb_dat
-    } 
-    .elsewhen(io.csr_idx === "hb80".U(12.W)){
-      mcycleh := wb_dat
-    }
+    // .elsewhen(io.csr_idx === "hb00".U(12.W)){
+    //   mcycle := wb_dat
+    // } 
+    // .elsewhen(io.csr_idx === "hb80".U(12.W)){
+    //   mcycleh := wb_dat
+    // }
     .otherwise{
 
     }
