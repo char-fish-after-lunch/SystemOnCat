@@ -2,7 +2,7 @@ package systemoncat.core
 import chisel3._
 import chisel3.util._
 import chisel3.testers._
-object CliAddr{
+object CliAddr{ //Should be different for each core
 	val msip_addr = "h2000000".U(32.W)
 	val cmph_addr = "h2004004".U(32.W)
 	val cmpl_addr = "h2004000".U(32.W)
