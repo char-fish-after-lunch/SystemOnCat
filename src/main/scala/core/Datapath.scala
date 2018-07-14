@@ -49,21 +49,29 @@ class Datapath() extends Module {
 
     val ex_reg_imme = Reg(UInt()) // 32 bit immediate, sign extended if necessary
 
-    val csr_branch = Wire(Bool())
+    val csr_branch = Wire(Bool()) // when csr branch happens, all prev stages will be flushed
 
     // ---------- NPC ----------
     val pc = RegInit(0.U(32.W)) // initial pc
+    val pc_valid = (!csr_branch)
     val ex_branch_taken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
 
     val id_exe_data_hazard = Wire(Bool())
     val pc_stall = id_exe_data_hazard || io.imem.locked
+
     val csr_epc = Wire(UInt())
     val mem_eret = Wire(Bool())
     val csr_evec = Wire(UInt())
-    val mem_interp = Wire(Bool())
-    val npc = Mux(mem_interp, csr_evec,
-        Mux(mem_eret, csr_epc, 
+    val mem_interp = Wire(Bool()) // used to flush pipeline at the end of MEM
+
+    val csr_reg_epc = Reg(UInt())
+    val mem_reg_eret = Reg(Bool())
+    val csr_reg_evec = Reg(UInt())
+    val mem_reg_interp = Reg(Bool()) // used to decide next pc at the beginning of WB
+
+    val npc = Mux(mem_reg_interp, csr_reg_evec,
+        Mux(mem_reg_eret, csr_reg_epc, 
         Mux(ex_branch_taken, ex_branch_target,
         Mux(pc_stall, pc, pc + 4.U))))
     pc := npc
@@ -80,7 +88,7 @@ class Datapath() extends Module {
     inst_reg := io.imem.inst
     id_reg_pc := pc
 
-    id_reg_valid := ((!ex_branch_taken && !pc_stall) || id_exe_data_hazard) && (!csr_branch)
+    id_reg_valid := ((!ex_branch_taken && !pc_stall) || id_exe_data_hazard) && (!csr_branch) && pc_valid
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE hazard, then ID is also stalled and should be kept
 
@@ -242,6 +250,11 @@ class Datapath() extends Module {
     csr_branch := mem_interp || mem_eret
     csr_epc := csr.io.epc
     csr_evec := csr.io.evec
+
+    mem_reg_interp := mem_interp
+    mem_reg_eret := mem_eret
+    csr_reg_epc := csr_epc
+    csr_reg_evec := csr_evec
 
     // ---------- WB -----------
     when (mem_reg_valid) {
