@@ -66,7 +66,7 @@ class MStatus extends Bundle{
   
   val mpp = UInt(2.W) //previous mode
   val hpp = UInt(2.W)
-  val spp = UInt(2.W)
+  val spp = UInt(1.W)
   
   val mpie = Bool() //previous mie (Saved status)
   val hpie = Bool()
@@ -240,8 +240,8 @@ class CSRFile() extends Module{
   val mcause = Reg(UInt(32.W))   // 0x342
 
   //Machine Cycle
-  val mcycle = Reg(UInt(32.W))   // 0xB00
-  val mcycleh = Reg(UInt(32.W))  // 0xB80
+  //val mcycle = Reg(UInt(32.W))   // 0xB00
+  //val mcycleh = Reg(UInt(32.W))  // 0xB80
   
   //Client Register (For software interrupt and time interrupt)
   //val mtime = Reg(UInt(32.W))
