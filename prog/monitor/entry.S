@@ -1,10 +1,13 @@
+.section .text
 .org 0x0
     .global _start
+
 _start:
+    nop
     li sp, 0xe700 # set up the stack
     j start
 
-.global entry
+.global _entry
 _entry:
     addi sp, sp, -4*31
 
@@ -43,7 +46,7 @@ _entry:
 
     addi ra, a1, 0
 
-    li a2, stack_top
+    li a2, 0x3000
     sw sp, 0(a2)
 
     addi x2, x0, 0
@@ -79,7 +82,7 @@ _entry:
 
     jalr ra, ra, 0
 
-    li ra, regs
+    li ra, 0x3100
     sw x1, 4*1(ra)
     sw x2, 4*2(ra)
     sw x3, 4*3(ra)
@@ -112,7 +115,7 @@ _entry:
     sw x30, 4*30(ra)
     sw x31, 4*31(ra)
 
-    li sp, stack_top
+    li sp, 0x3100
     lw sp, 0(sp)
 
     lw x1, 4*0(sp)
@@ -147,9 +150,6 @@ _entry:
     lw x30, 4*29(sp)
     lw x31, 4*30(sp)
 
-    addi sp, sp, 31*4
+    li sp, 31*4
 
     ret
-
-stack_top:
-    .word 0x0

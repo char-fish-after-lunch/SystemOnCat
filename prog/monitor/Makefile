@@ -20,7 +20,7 @@ out.o: entry.o monitor.o
 entry.o: entry.S
 	$(GCC) -c -march=$(MARCH) -o entry.o entry.S
 
-monitor.o: monitor.c
+monitor.o: monitor.c inst.h
 	$(GCC) -c -march=$(MARCH) -o monitor.o monitor.c
 
 clean:

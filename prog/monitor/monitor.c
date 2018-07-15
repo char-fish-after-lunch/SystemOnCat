@@ -1,3 +1,5 @@
+#include "inst.h"
+
 #define ADR_SERIAL 0xf000
 #define PUTCHAR(c) (*((char*)ADR_SERIAL) = (c))
 #define GETCHAR(c) (c = *((char*)ADR_SERIAL))
@@ -9,7 +11,11 @@
 #define REGSIZE 32
 #define HEX "0123456789abcdef"
 
+#define GETBITS(src, ld, rd) (((src) >> (ld)) & ((1 << ((rd) - (ld) + 1)) - 1))
+#define SETBITS(dest, ld, rd, src) ((dest) | (GETBITS((src), 0, (rd) - (ld)) << (ld)))
+
 extern void _entry(unsigned adr);
+
 
 void print(char* str){
     int i;
@@ -126,8 +132,114 @@ void edit_exe(){
     }
 }
 
-void inst_exe(){
+bool parse_arg(char* c, unsigned* res){
+    if(!*c || !*(c + 1))
+        return false;
+    if(*c == '0' && *(c + 1) == 'x')
+        *res = str2hex(c);
+    else if(*c == 'x' && *(c + 1) == '0' && *(c + 2) == 'x')
+        *res = str2hex(c + 1);
+    return true;
+}
 
+// translate an instruction to an unsigned
+// 0 for invalid instruction
+unsigned inst2int(char* c){
+    int i, j;
+    for(i = 0; i < INST_N; i ++){
+        for(j = 0; INST_NAMES[i][j] && c[j] && INST_NAMES[i][j] == c[j]; j ++);
+        if(!INST_NAMES[i][j] || (!c[j] && c[j] != ' '))
+            return 0;
+        break;
+    }
+    if(i == INST_N)
+        return 0;
+    unsigned res = INST_CONFIG[i][1];
+    unsigned inst_type = INST_CONFIG[i][0];
+    unsigned tmp_val;
+    bool re;
+    if(inst_type == ITYPE_R || inst_type == ITYPE_I ||
+        inst_type == ITYPE_S || inst_type == ITYPE_B)
+        res = SETBITS(res, 12, 14, INST_CONFIG[i][2]);
+    if(inst_type == ITYPE_R)
+        res = SETBITS(res, 25, 31, INST_CONFIG[i][3]);
+    if(inst_type == ITYPE_R || inst_type == ITYPE_I ||
+        inst_type == ITYPE_U || inst_type == ITYPE_J){
+        c = next_word(c);
+        re = parse_arg(c, &tmp_val);
+        if(!re)
+            return 0;
+        res = SETBITS(res, 7, 11, tmp_val);
+    }
+    if(inst_type == ITYPE_R || inst_type == ITYPE_I ||
+        inst_type == ITYPE_S || inst_type == ITYPE_B){
+        c = next_word(c);
+        re = parse_arg(c, &tmp_val);
+        if(!re)
+            return 0;
+        res = SETBITS(res, 15, 19, tmp_val);
+    }
+    if(inst_type == ITYPE_R || inst_type == ITYPE_S ||
+        inst_type == ITYPE_B){
+        c = next_word(c);
+        re = parse_arg(c, &tmp_val);
+        if(!re)
+            return 0;
+        res = SETBITS(res, 20, 24, tmp_val);
+    }
+    if(inst_type != ITYPE_R){
+        c = next_word(c);
+        re = parse_arg(c, &tmp_val);
+        if(!re)
+            return 0;
+        switch(inst_type){
+            case ITYPE_I:
+                res = SETBITS(res, 20, 31, tmp_val);
+                break;
+            case ITYPE_S:
+                res = SETBITS(res, 7, 11, tmp_val);
+                res = SETBITS(res, 25, 31, tmp_val >> 5);
+                break;
+            case ITYPE_B:
+                res = SETBITS(res, 7, 7, tmp_val >> 11);
+                res = SETBITS(res, 8, 11, tmp_val >> 1);
+                res = SETBITS(res, 25, 30, tmp_val >> 5);
+                res = SETBITS(res, 31, 31, tmp_val >> 12);
+                break;
+            case ITYPE_U:
+                res = SETBITS(res, 12, 31, tmp_val >> 12);
+                break;
+            case ITYPE_J:
+                res = SETBITS(res, 12, 19, tmp_val >> 12);
+                res = SETBITS(res, 20, 20, tmp_val >> 11);
+                res = SETBITS(res, 21, 30, tmp_val >> 1);
+                res = SETBITS(res, 31, 31, tmp_val >> 20);
+        }
+    }
+    return res;
+}
+
+void inst_exe(){
+    char *c = next_word(buffer);
+    if(!*c || !*(c+1))
+        return;
+    unsigned adr = str2hex(c), val;
+    while(true){
+        print("[");
+        hex2str(adr);
+        print(buffer);
+        print("] ");
+        get_line();
+        c = next_word(buffer);
+        if(!*c || !*(c+1))
+            break;
+        val = inst2int(c);
+        if(val == 0)
+            continue;
+
+        *((unsigned*)adr) = val;
+        adr += 4;
+    }
 }
 
 void view_exe(){
@@ -153,10 +265,12 @@ void disas_exe(){
 }
 
 void start(){
-    init();
 
     print("Welcome to System on Cat!\n");
     print("Monitor v0.1\n");
+
+    init();
+
     
     while(true){
         print(STR_PROMPT);
