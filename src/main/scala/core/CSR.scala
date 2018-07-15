@@ -271,7 +271,9 @@ class CSRFile() extends Module{
     CSR.C -> (io.read_csr_dat & ~io.wb_csr_dat)
   ))  
 
-  val write_zero = (io.inst(19,15) === 0.U(5.W))
+  val write_zero = Mux(io.csr_cmd === CSR.S || io.csr_cmd === CSR.C, io.inst(19,15) === 0.U(5.W), false.B)
+  // in CSRRS/CSRRC/CSRRSI/CSRRCI, inst(19:15) == 0 indicates no writing.
+  // but in CSRRW/CSRRWI, that means setting CSR to 0.U(32.W)
 
   //Write CSR logic
   when(io.csr_ena & io.csr_wr_en & ~write_zero){

@@ -58,7 +58,9 @@ class Datapath() extends Module {
     val ex_branch_target = Wire(UInt())
 
     val id_exe_data_hazard = Wire(Bool())
-    val pc_stall = id_exe_data_hazard || io.imem.locked
+    val id_csr_data_hazard = Wire(Bool())
+    val pc_stall = id_exe_data_hazard || id_csr_data_hazard || io.imem.locked
+    val id_replay = Wire(Bool())
 
     val csr_epc = Wire(UInt())
     val mem_eret = Wire(Bool())
@@ -85,12 +87,12 @@ class Datapath() extends Module {
 
     io.ctrl.inst := inst_reg
     
-    inst_reg := io.imem.inst
-    id_reg_pc := pc
-
-    id_reg_valid := ((!ex_branch_taken && !pc_stall) || id_exe_data_hazard) && (!csr_branch) && pc_valid
+    inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
+    id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
+    id_replay := id_exe_data_hazard || id_csr_data_hazard
+    id_reg_valid := ((!ex_branch_taken && !pc_stall) || id_replay) && (!csr_branch) && pc_valid
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
-    // but if pc stalled because of ID/EXE hazard, then ID is also stalled and should be kept
+    // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
 
     val id_rs1 = inst_reg(19, 15) // rs1
     val id_rs2 = inst_reg(24, 20) // rs2
@@ -115,8 +117,14 @@ class Datapath() extends Module {
 
     val id_bypass_src = id_raddr.map(raddr => bypass_sources.map(s => s._1 && s._2 === raddr))
     id_exe_data_hazard := ex_reg_valid && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.mem &&
-        (ex_waddr === id_rs1 || ex_waddr === id_rs2) 
+        ((io.ctrl.sig.rxs1 && ex_waddr === id_rs1) || (io.ctrl.sig.rxs2 && ex_waddr === id_rs2)) 
     // if a data loaded from RAM is immediately used, pipeline must be stalled
+
+    id_csr_data_hazard := (ex_reg_valid && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.csr_cmd =/= CSR.N &&
+        ((io.ctrl.sig.rxs1 && ex_waddr === id_rs1) || (io.ctrl.sig.rxs2 && ex_waddr === id_rs2))) ||
+        (mem_reg_valid && mem_ctrl_sigs.wb_en && mem_ctrl_sigs.csr_cmd =/= CSR.N &&
+        ((io.ctrl.sig.rxs1 && mem_waddr === id_rs1) || (io.ctrl.sig.rxs2 && mem_waddr === id_rs2)))
+    // data loaded from CSR can only be used after 2 clocks, pipeline must be stalled before that
 
     // ---------- EXE ----------
     // regs update
@@ -126,7 +134,7 @@ class Datapath() extends Module {
         ex_reg_inst := inst_reg
         ex_reg_pc := id_reg_pc
     }
-    ex_reg_valid := ((!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard)) && (!csr_branch)
+    ex_reg_valid := (!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard) && (!csr_branch) && (!id_csr_data_hazard)
     // TODO: check valid (stall logic related)
 
     // bypass logic
@@ -245,7 +253,7 @@ class Datapath() extends Module {
 
     val mem_has_interrupt = csr.io.interrupt || io.irq_client.sft_irq_r
     val mem_has_exception = csr.io.expt
-    mem_interp := mem_has_exception || mem_has_exception
+    mem_interp := mem_has_exception || mem_has_interrupt
     mem_eret := mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET
     csr_branch := mem_interp || mem_eret
     csr_epc := csr.io.epc
