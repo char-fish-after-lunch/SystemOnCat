@@ -172,8 +172,8 @@ class Datapath() extends Module {
     alu.io.in1 := ex_op1
     alu.io.in2 := ex_op2
 
-    ex_branch_taken := (ex_reg_valid && alu.io.cmp_out && ex_ctrl_sigs.branch) || 
-        ex_ctrl_sigs.jal || ex_ctrl_sigs.jalr
+    ex_branch_taken := ex_reg_valid && ((alu.io.cmp_out && ex_ctrl_sigs.branch) || 
+        ex_ctrl_sigs.jal || ex_ctrl_sigs.jalr)
 
     ex_branch_target := Mux(ex_ctrl_sigs.jalr,
             alu.io.out, ex_reg_pc + ex_reg_imme)
@@ -289,6 +289,9 @@ class Datapath() extends Module {
     io.debug_devs.dpy0 := pc(7, 0)
     io.debug_devs.dpy1 := npc(7, 0)
 
+
+
+    // debug info below:
     printf("inst[%x] -> %x\n", pc, io.imem.inst)
     printf("alu out: %x\n", alu.io.out)
         // ex_reg_rs_bypass(i) := do_bypass // bypass is checked at IF, but done in EXE
@@ -300,5 +303,8 @@ class Datapath() extends Module {
     printf("bypass source regs: (%x, %x, %x)\n", ex_waddr, mem_waddr, wb_waddr)
     printf("regs ind: (%x, %x)\n", id_rs1, id_rs2)
     // 
-    
+
+    printf("ex_branch_target: (%x, taken: %x), ", ex_branch_target, ex_branch_taken)
+    printf("pc_stall: %x, io.imem.locked: %x\n", pc_stall, io.imem.locked)
+
 }

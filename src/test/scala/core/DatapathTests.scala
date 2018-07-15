@@ -165,7 +165,12 @@ class TestDMem() extends Module with TestUtils {
     when (io.core.wr_en) {
         printf("mem access: [%x] -> %x \n", io.core.addr, io.core.wr_data)
     }
-    io.inst_locked := io.core.wr_en || io.core.rd_en
+    val wr_en = Reg(Bool())
+    val rd_en = Reg(Bool())
+    wr_en := io.core.wr_en
+    rd_en := io.core.rd_en
+
+    io.inst_locked := wr_en || rd_en
 }
 
 class TestClient() extends Module {
@@ -193,7 +198,7 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
     val test_insts = DatapathTestSpecs.test_insts(testType)
     val test_alu_results = VecInit(DatapathTestSpecs.test_alu_results(testType))
 
-    val (cntr, done) = Counter(true.B, 40)
+    val (cntr, done) = Counter(true.B, 60)
 
     // printf(s"Clk: \n")
     // printf(s"INST[%x] => %x\n", ifetch.io.pc, ifetch.io.inst)
