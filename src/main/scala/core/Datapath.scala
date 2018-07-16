@@ -253,9 +253,9 @@ class Datapath() extends Module {
 
     val mem_has_interrupt = csr.io.interrupt || io.irq_client.sft_irq_r
     val mem_has_exception = csr.io.expt
-    mem_interp := mem_has_exception || mem_has_interrupt
-    mem_eret := mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET
-    csr_branch := mem_interp || mem_eret
+    mem_interp := (mem_has_exception || mem_has_interrupt) && mem_reg_valid
+    mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_reg_valid
+    csr_branch := (mem_interp || mem_eret) && mem_reg_valid
     csr_epc := csr.io.epc
     csr_evec := csr.io.evec
 

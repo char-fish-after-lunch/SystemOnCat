@@ -2,9 +2,11 @@
     .global _start
 _start:
 nop
-li x1, 0x30
+li x1, 0x38
+li x2, 0x80
 csrw mtvec, x1
-nop
+csrwi mstatus, 0x8
+csrw mie, x2
 nop
 nop
 nop

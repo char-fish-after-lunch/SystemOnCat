@@ -114,11 +114,12 @@ object DatapathTestSpecs extends TestUtils {
 
     val timer_irq_test_insts = Seq(
         0x00000013.S(32.W),
-        0x03000093.S(32.W),
+        0x03800093.S(32.W),
+        0x08000113.S(32.W),
         0x30509073.S(32.W),
-        0x00000013.S(32.W),
-        0x00000013.S(32.W),
-        0x00000013.S(32.W),
+
+        0x30045073.S(32.W),
+        0x30411073.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
 
@@ -126,11 +127,14 @@ object DatapathTestSpecs extends TestUtils {
         0x00000013.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
-        0x000037f5.S(32.W),
+
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x0000f537.S(32.W),
         0x02100093.S(32.W),
         0x00152023.S(32.W),
+        
         0x00000013.S(32.W),
-
         0x30200073.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
@@ -241,7 +245,7 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
 
     var tmr_irq = 0
     if (testType == TimerInterruptTest) {
-        tmr_irq = 8
+        tmr_irq = 12
     }
     val client = Module(new TestClient(tmr_irq))
     dpath.io.ctrl <> ctrl.io

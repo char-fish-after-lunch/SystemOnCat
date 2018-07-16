@@ -388,7 +388,7 @@ class CSRFile() extends Module{
     }
   }
 
-  printf("mepc: %x, mcause: %x, mstatus: %x, mtvec: %x, mip: %x\n", mepc, mcause.asUInt, mstatus.asUInt, mtvec.asUInt, mip.asUInt)
+  printf("mepc: %x, mcause: %x, mstatus: %x, mtvec: %x, mip: %x, mie: %x\n", mepc, mcause.asUInt, mstatus.asUInt, mtvec.asUInt, mip.asUInt, mie.asUInt)
   printf("io info: expt[%x], interrupt[%x], evec[%x], epc[%x]\n", io.expt, io.interrupt, io.evec, io.epc)
 
 }
