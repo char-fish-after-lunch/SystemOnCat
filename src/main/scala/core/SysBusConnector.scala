@@ -46,7 +46,7 @@ class SysBusConnector(irq_client: Client) extends Module {
 
     val bus_map = Seq(
         // default -> 0
-        BitPat("b00000000000000001111000000000?00") -> 1.U(2.W),
+        BitPat("b00000000000000001111000000000???") -> 1.U(2.W),
         BitPat("b000000100000000001000000000?????") -> 2.U(2.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(

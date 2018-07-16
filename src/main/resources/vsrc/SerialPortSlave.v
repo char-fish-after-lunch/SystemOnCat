@@ -157,7 +157,7 @@ assign err_o = (state == STATE_ERR);
 assign rty_o = 0;
 assign dat_o = {{24{1'b0}}, ans};
 
-assign stall = (state != STATE_IDLE) & ~ack;
+assign stall = (state != STATE_IDLE) & ~ack & (state != STATE_ERR);
 assign stall_o = stall;
 
 endmodule
