@@ -260,8 +260,85 @@ void view_exe(){
     }
 }
 
-void disas_exe(){
+void print_int2inst(unsigned val){
+    int i, itype;
+    for(i = 0; i < INST_N; i ++){
+        if(INST_CONFIG[i][1] != GETBITS(val, 0, 6))
+            continue;
+        itype = INST_CONFIG[i][0];
+        if(itype == ITYPE_R && INST_CONFIG[i][3] != GETBITS(val, 25, 31))
+            continue;
+        if((itype == ITYPE_R || itype == ITYPE_I || itype == ITYPE_S || itype == ITYPE_B) &&
+            INST_CONFIG[i][2] != GETBITS(val, 12, 14))
+            continue;
+        
+        break;
+    }
+    if(i == INST_N){
+        // no instruction matched
+        print("<Invalid>");
+        return;
+    }
+    if(itype == ITYPE_R || itype == ITYPE_I || itype == ITYPE_U || itype == ITYPE_J){
+        print(" ");
+        hex2str(GETBITS(val, 7, 11));
+        print(buffer);
+    }
+    if(itype == ITYPE_R || itype == ITYPE_I || itype == ITYPE_S || itype == ITYPE_B){
+        print(" ");
+        hex2str(GETBITS(val, 15, 19));
+        print(buffer);
+    }
+    if(itype == ITYPE_R || itype == ITYPE_S || itype == ITYPE_B){
+        print(" ");
+        hex2str(GETBITS(val, 20, 24));
+        print(buffer);        
+    }
+    unsigned imm = 0;
+    if(itype != ITYPE_R){
+        switch(itype){
+            case ITYPE_I:
+                imm = GETBITS(val, 20, 31);
+                break;
+            case ITYPE_S:
+                imm = GETBITS(val, 7, 11) | (GETBITS(val, 25, 31) << 5);
+                break;
+            case ITYPE_B:
+                imm |= GETBITS(val, 7, 7) << 11;
+                imm |= GETBITS(val, 8, 11) << 1;
+                imm |= GETBITS(val, 25, 30) << 5;
+                imm |= GETBITS(val, 31, 31) << 12;
+                break;
+            case ITYPE_U:
+                imm = GETBITS(val, 12, 31) << 12;
+                break;
+            case ITYPE_J:
+                imm |= GETBITS(val, 12, 19) << 12;
+                imm |= GETBITS(val, 20, 20) << 11;
+                imm |= GETBITS(val, 21, 30) << 1;
+                imm |= GETBITS(val, 31, 31) << 20;
+        }
+        print(" ");
+        hex2str(imm);
+        print(buffer);
+    }
+}
 
+void disas_exe(){
+    char* c = next_word(buffer);
+    if(!*c || !*(c+1))
+        return;
+    unsigned adr = str2hex(c), val;
+    while(true){
+        print("[");
+        hex2str(adr);
+        print(buffer);
+        print("] ");
+        val = *((unsigned*)adr);
+        print_int2inst(val);
+        print("\n");
+        adr += 4;
+    }
 }
 
 void start(){
