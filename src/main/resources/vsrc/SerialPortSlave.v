@@ -71,7 +71,7 @@ end
 
 always @(posedge clk_bus) begin
     if(cyc_i && stb_i && !stall) begin
-        if(adr_i[0] == 0) begin
+        if(adr_i[2] == 0) begin
             if(we_i) begin
                 if(dat_send_ta + 1'b1 == dat_send_he) begin
                     ack <= 0;

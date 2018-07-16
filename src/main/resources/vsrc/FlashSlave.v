@@ -62,7 +62,7 @@ end
 always @(posedge clk_bus) begin
     if(cyc_i && stb_i && !stall) begin
         if(we_i) begin
-            if(adr_i[0] == 0) begin
+            if(adr_i[2] == 0) begin
                 // DAT_WRITE : not implemented
                 ack <= 0;
                 state <= STATE_ERR;
@@ -74,7 +74,7 @@ always @(posedge clk_bus) begin
             end
         end else begin
             ack <= 0;
-            if(adr_i[0] == 0) begin
+            if(adr_i[2] == 0) begin
                 // DAT_READ
                 state <= STATE_DAT_READ;
             end else begin
