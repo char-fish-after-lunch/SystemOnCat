@@ -1,8 +1,10 @@
 #include "inst.h"
 
-#define ADR_SERIAL 0xf000
-#define PUTCHAR(c) (*((char*)ADR_SERIAL) = (c))
-#define GETCHAR(c) (c = *((char*)ADR_SERIAL))
+#define ADR_SERIAL_BUF 0xf004
+#define ADR_SERIAL_DAT 0xf000
+#define PUTCHAR(c) {while(!((*((char*)ADR_SERIAL_BUF)) & 0xf)); \
+    (*((char*)ADR_SERIAL_DAT) = (c));}
+#define GETCHAR(c) ((c) = *((char*)ADR_SERIAL_DAT))
 #define STR_PROMPT ">>> "
 #define bool int
 #define true 1
@@ -342,7 +344,9 @@ void disas_exe(){
 }
 
 void start(){
-
+    // register unsigned cc = *((unsigned*)ADR_SERIAL_BUF);
+    // asm("nop;nop;nop;nop;nop;");
+    // *((char*)0x6000) = cc;
     print("Welcome to System on Cat!\n");
     print("Monitor v0.1\n");
 
