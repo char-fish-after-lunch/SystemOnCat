@@ -75,8 +75,8 @@ class SysBusConnector(irq_client: Client) extends Module {
     io.imem.res.data_rd := 0.U(32.W)
     io.dmem.res.locked := false.B
 
-    val dmem_reg_en = Reg(Bool())
-    val imem_reg_en = Reg(Bool())
+    val dmem_reg_en = RegInit(false.B)
+    val imem_reg_en = RegInit(false.B)
 
     io.imem.res.locked := dmem_reg_en
 
