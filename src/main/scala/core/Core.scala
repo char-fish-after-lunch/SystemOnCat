@@ -25,15 +25,18 @@ class Core() extends Module {
     val ctrl  = Module(new Control)
     val ifetch = Module(new IFetch)
     val dmem = Module(new DMem)
-    val bus_conn = Module(new SysBusConnector)
+    val irq_client = Module(new Client)
+    val bus_conn = Module(new SysBusConnector(irq_client))
 
     bus_conn.io.external.ram <> io.ram
     bus_conn.io.external.serial <> io.serial
+    bus_conn.io.external.irq_client <> irq_client.io.out
 
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs <> io.devs
     dpath.io.imem <> ifetch.io.core
     dpath.io.dmem <> dmem.io.core
+    dpath.io.irq_client <> irq_client.io.in
 
     ifetch.io.bus <> bus_conn.io.imem
     dmem.io.bus <> bus_conn.io.dmem

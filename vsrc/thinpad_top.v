@@ -150,8 +150,27 @@ wire io_serial_stb_i;
 wire io_serial_we_i;
 wire io_serial_stall_o;
 
+wire clk_13M;
+wire real_clk;
+
+
+ 
+reg [3:0] cnt;
+always @(posedge clk_50M) begin
+    if (cnt == 3) begin
+        cnt <= 0;
+    end
+    else begin
+        cnt <= cnt + 1;
+    end
+end
+
+assign clk_13M = (cnt >= 2) ? 1 : 0;
+
+assign real_clk = (dip_sw[0] && dip_sw[1] && dip_sw[30] && dip_sw[31]) ? clk_13M : clock_btn;
+
 SystemOnCat (
-    .clock(clock_btn),
+    .clock(real_clk),
     .reset(reset_btn),
     .io_devs_touch_btn(touch_btn),
     .io_devs_dip_sw(dip_sw),
@@ -205,7 +224,7 @@ RAMSlave(
     .sram_oe(base_ram_oe_n),
     .sram_we(base_ram_we_n),
     .sram_be(base_ram_be_n),
-    .clk_bus(clock_btn),
+    .clk_bus(real_clk),
     .rst_bus(reset_btn)
 );
 
@@ -227,7 +246,7 @@ SerialPortSlave(
     .uart_start(ext_uart_start),
     .uart_dat_i(ext_uart_rx),
     .uart_dat_o(ext_uart_tx),
-    .clk_bus(clock_btn),
+    .clk_bus(real_clk),
     .rst_bus(reset_btn)
 );
 
