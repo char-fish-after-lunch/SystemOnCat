@@ -270,8 +270,8 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
 
 
 class DatapathTests extends org.scalatest.FlatSpec {
-    // BasicTest, BypassTest, BranchTest, FibonacciTest, CSRTest, TimerInterruptTest
-  Seq(TmpTest) foreach { test =>
+    // BasicTest, BypassTest, BranchTest, FibonacciTest, CSRTest, TimerInterruptTest, TmpTest
+  Seq(TimerInterruptTest) foreach { test =>
     "Datapath" should s"pass $test" in {
       assert(TesterDriver execute (() => new DatapathTester(new Datapath, test)))
     }
