@@ -50,10 +50,11 @@ class Datapath() extends Module {
     val ex_reg_imme = Reg(UInt()) // 32 bit immediate, sign extended if necessary
 
     val csr_branch = Wire(Bool()) // when csr branch happens, all prev stages will be flushed
+    val csr_flush_vector = Wire(Bits(4.W)) // whether pc, id, exe, mem should be flushed after csr branch
 
     // ---------- NPC ----------
     val pc = RegInit(0.U(32.W)) // initial pc
-    val pc_valid = (!csr_branch)
+    val pc_valid = !(csr_branch && csr_flush_vector(3))
     val ex_branch_taken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
 
@@ -68,12 +69,12 @@ class Datapath() extends Module {
     val mem_interp = Wire(Bool()) // used to flush pipeline at the end of MEM
 
     val csr_reg_epc = Reg(UInt())
-    val mem_reg_eret = Reg(Bool())
+    val wb_reg_eret = Reg(Bool())
     val csr_reg_evec = Reg(UInt())
-    val mem_reg_interp = Reg(Bool()) // used to decide next pc at the beginning of WB
+    val wb_reg_interp = Reg(Bool()) // used to decide next pc at the beginning of WB
 
-    val npc = Mux(mem_reg_interp, csr_reg_evec,
-        Mux(mem_reg_eret, csr_reg_epc, 
+    val npc = Mux(wb_reg_interp, csr_reg_evec,
+        Mux(wb_reg_eret, csr_reg_epc, 
         Mux(ex_branch_taken, ex_branch_target,
         Mux(pc_stall, pc, pc + 4.U))))
     pc := npc
@@ -90,7 +91,7 @@ class Datapath() extends Module {
     inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
     id_replay := id_exe_data_hazard || id_csr_data_hazard
-    id_reg_valid := ((!ex_branch_taken && !pc_stall) || id_replay) && (!csr_branch) && pc_valid
+    id_reg_valid := ((!ex_branch_taken && !pc_stall) || id_replay) && (!(csr_branch && csr_flush_vector(2))) && pc_valid
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
 
@@ -134,7 +135,7 @@ class Datapath() extends Module {
         ex_reg_inst := inst_reg
         ex_reg_pc := id_reg_pc
     }
-    ex_reg_valid := (!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard) && (!csr_branch) && (!id_csr_data_hazard)
+    ex_reg_valid := (!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard) && (!(csr_branch && csr_flush_vector(1))) && (!id_csr_data_hazard)
     // TODO: check valid (stall logic related)
 
     // bypass logic
@@ -192,7 +193,7 @@ class Datapath() extends Module {
 
 
 
-    mem_reg_valid := ex_reg_valid && (!csr_branch) // TODO: check valid (stall logic related)
+    mem_reg_valid := ex_reg_valid && (!(csr_branch && csr_flush_vector(0))) // TODO: check valid (stall logic related)
 
     io.dmem.wr_data := ex_rs(1)
     io.dmem.addr := alu.io.out
@@ -210,6 +211,10 @@ class Datapath() extends Module {
         Mux(ex_reg_valid, ex_reg_pc, 
         Mux(id_reg_valid, id_reg_pc, pc)))) 
     // I guess there should be at least one valid instruction in pipeline...
+    csr_flush_vector := Mux(wb_reg_valid, "b1111".U, 
+        Mux(mem_reg_valid, "b1110".U, 
+        Mux(ex_reg_valid, "b1100".U, 
+        Mux(id_reg_valid, "b1000".U, "b0000".U)))) 
 
     csr.io.pc := last_valid_pc_from_wb
     csr.io.addr := 0.U(32.W) // TODO: after implementing i/d memory exception, this should be assigned
@@ -233,9 +238,9 @@ class Datapath() extends Module {
     
     // Trap Instruction
     val wb_is_eret = wb_reg_inst === MRET || wb_reg_inst === URET || wb_reg_inst === SRET
-    csr.io.isEcall := wb_reg_inst === ECALL
-    csr.io.isEbreak := wb_reg_inst === EBREAK
-    csr.io.isEret := wb_is_eret
+    csr.io.isEcall := wb_reg_inst === ECALL && wb_reg_valid
+    csr.io.isEbreak := wb_reg_inst === EBREAK && wb_reg_valid
+    csr.io.isEret := wb_is_eret && wb_reg_valid
     
     // page Fault. TODO: this should be assigned after implementing MMU
     csr.io.iPF := false.B //Instruction Page Fault 
@@ -253,14 +258,14 @@ class Datapath() extends Module {
 
     val mem_has_interrupt = csr.io.interrupt || io.irq_client.sft_irq_r
     val mem_has_exception = csr.io.expt
-    mem_interp := (mem_has_exception || mem_has_interrupt) && mem_reg_valid
+    mem_interp := mem_has_exception || mem_has_interrupt
     mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_reg_valid
-    csr_branch := (mem_interp || mem_eret) && mem_reg_valid
+    csr_branch := mem_interp || mem_eret
     csr_epc := csr.io.epc
     csr_evec := csr.io.evec
 
-    mem_reg_interp := mem_interp
-    mem_reg_eret := mem_eret
+    wb_reg_interp := mem_interp
+    wb_reg_eret := mem_eret
     csr_reg_epc := csr_epc
     csr_reg_evec := csr_evec
 
