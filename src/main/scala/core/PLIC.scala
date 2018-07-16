@@ -34,7 +34,7 @@ class PLICIO() extends Bundle{
 
 	//Read Write Data
 	val read_plic_dat = Output(UInt(32.W))
-	val wb_plic_dat = Output(UInt(32.W))
+	val wb_plic_dat = Input(UInt(32.W))
 
 	//Interrupt Input
 	val serial_irq_r = Input(Bool())
@@ -83,7 +83,9 @@ class PLIC() extends Module{
 		net_gate := true.B
 	}
 
-	
+	io.core1_ext_irq_r := false.B
+	io.core2_ext_irq_r := false.B
+
 	when(keyboard_ip){
 		//Notify Core 1
 		Core1IR := InterruptID.KeyboardID
@@ -115,7 +117,7 @@ class PLIC() extends Module{
 	//Register Read Logic(Interrupt Claim)
 	when(io.plic_en & io.plic_rd_en){
 		when(io.addr === InterruptRegisterAddr.Core1Addr){
-			io.read_plic_dat := Core1IR
+			io.read_plic_dat := Core1IR.asUInt()
 			io.core1_ext_irq_r := false.B
 			when( Core1IR === InterruptID.KeyboardID ){
 				keyboard_ip := false.B
@@ -125,7 +127,7 @@ class PLIC() extends Module{
 				net_ip := false.B
 			}
 		} .elsewhen(io.addr === InterruptRegisterAddr.Core2Addr){
-			io.read_plic_dat := Core2IR
+			io.read_plic_dat := Core2IR.asUInt()
 			io.core2_ext_irq_r := false.B
 			when( Core2IR === InterruptID.KeyboardID ){
 				keyboard_ip := false.B

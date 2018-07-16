@@ -353,7 +353,7 @@ class CSRFile() extends Module{
   } .elsewhen(io.isEret) { //Eret Handler
     prv := mstatus.mpp
     mstatus.mie := mstatus.mpie
-  } .elsewhen(mip.meip){ //Extenral Interrupt Handler
+  } .elsewhen(mip.meip | io.ext_irq_r){ //Extenral Interrupt Handler
     when(mstatus.mie & mie.meie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MEI)
@@ -364,7 +364,7 @@ class CSRFile() extends Module{
       mstatus.mie := false.B
       mstatus.mpie := mstatus.mie
     }
-  } .elsewhen(mip.msip){ //Software Interrupt Handler
+  } .elsewhen(mip.msip | io.sft_irq_r){ //Software Interrupt Handler
     when(mstatus.mie & mie.msie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MSI)
@@ -375,7 +375,7 @@ class CSRFile() extends Module{
       mstatus.mie := false.B
       mstatus.mpie := mstatus.mie
     }
-  } .elsewhen(mip.mtip){ //Time Interrupt Handler
+  } .elsewhen(mip.mtip | io.tmr_irq_r){ //Time Interrupt Handler
     when(mstatus.mie & mie.mtie){
       mepc := next_pc
       mcause := Cat(Cause.Interrupt, Cause.MTI)
