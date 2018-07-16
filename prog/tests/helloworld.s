@@ -5,16 +5,12 @@ _start:
 nop
 nop
 nop
-addi x1, x0, 0x58
+addi x1, x0, 0x48
 addi x2, x0, 10
 addi x3, x0, 0
 li x10, 0xf000
 loop:
 lw x4, 0(x1)
-nop
-nop
-nop
-nop
 sw x4, 0(x10)
 addi x3, x3, 1
 addi x1, x1, 4

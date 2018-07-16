@@ -20,6 +20,12 @@ object FibonacciTest extends DatapathTest {
 object CSRTest extends DatapathTest {
   override def toString: String = "csr test"
 }
+object TimerInterruptTest extends DatapathTest {
+  override def toString: String = "time irq test"
+}
+object TmpTest extends DatapathTest {
+  override def toString: String = "tmp test"
+}
 
 object DatapathTestSpecs extends TestUtils {
     val basic_test_insts = Seq(
@@ -106,6 +112,42 @@ object DatapathTestSpecs extends TestUtils {
         0x00000013.S(32.W)
     )
 
+    val timer_irq_test_insts = Seq(
+        0x00000013.S(32.W),
+        0x03000093.S(32.W),
+        0x30509073.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x000037f5.S(32.W),
+        0x02100093.S(32.W),
+        0x00152023.S(32.W),
+        0x00000013.S(32.W),
+
+        0x30200073.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W)
+    )
+
+    val tmp_test_insts = Seq(
+        0x00000013.S(32.W),
+        0x00c00113.S(32.W),
+        0x00012083.S(32.W),
+        0x00112423.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+    )
+
     val empty_test_alu_results = Seq(
         0.U
     )
@@ -128,7 +170,9 @@ object DatapathTestSpecs extends TestUtils {
         BypassTest -> bypass_test_insts,
         BranchTest -> branch_test_insts,
         CSRTest -> csr_test_insts,
-        FibonacciTest -> fibonacci_test_insts
+        FibonacciTest -> fibonacci_test_insts,
+        TimerInterruptTest -> timer_irq_test_insts,
+        TmpTest -> tmp_test_insts
     )
 
     val test_alu_results = Map(
@@ -136,7 +180,9 @@ object DatapathTestSpecs extends TestUtils {
         BypassTest -> bypass_test_alu_results,
         BranchTest -> empty_test_alu_results,
         CSRTest -> empty_test_alu_results,
-        FibonacciTest -> empty_test_alu_results
+        FibonacciTest -> empty_test_alu_results,
+        TimerInterruptTest -> empty_test_alu_results,
+        TmpTest -> empty_test_alu_results
     )
 }
 
@@ -161,9 +207,12 @@ class TestDMemIO extends Bundle {
 
 class TestDMem() extends Module with TestUtils {
     val io = IO(new TestDMemIO)
-    io.core.rd_data := 0.U(32.W)
+    io.core.rd_data := 0x1010.U(32.W)
     when (io.core.wr_en) {
-        printf("mem access: [%x] -> %x \n", io.core.addr, io.core.wr_data)
+        printf("mem access write: [%x] -> %x \n", io.core.addr, io.core.wr_data)
+    }
+    when (io.core.rd_en) {
+        printf("mem access read: [%x] -> %x \n", io.core.addr, io.core.rd_data)
     }
     val wr_en = Reg(Bool())
     val rd_en = Reg(Bool())
@@ -173,10 +222,14 @@ class TestDMem() extends Module with TestUtils {
     io.inst_locked := wr_en || rd_en
 }
 
-class TestClient() extends Module {
+class TestClient(tmr_irq: Int) extends Module {
     val io = IO(new ClientIrqIO)
+    val cnt = RegInit(0.U(4.W))
+    cnt := Mux(cnt > tmr_irq.U, cnt, cnt + 1.U(4.W))
+
     io.sft_irq_r := false.B
-	io.tmr_irq_r := false.B
+	io.tmr_irq_r := tmr_irq.U.orR && (cnt === tmr_irq.U)
+    printf("------------------------------ cnt[%d], %x \n", cnt, io.tmr_irq_r)
 }
 
 class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTester {
@@ -185,7 +238,12 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
     val ctrl = Module(new Control)
     val ifetch = Module(new TestIFetch(testType))
     val dmem = Module(new TestDMem())
-    val client = Module(new TestClient())
+
+    var tmr_irq = 0
+    if (testType == TimerInterruptTest) {
+        tmr_irq = 8
+    }
+    val client = Module(new TestClient(tmr_irq))
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs.touch_btn := 0.U(4.W)
     dpath.io.debug_devs.dip_sw := 0.U(32.W)
@@ -212,8 +270,8 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
 
 
 class DatapathTests extends org.scalatest.FlatSpec {
-    // BasicTest, BypassTest, BranchTest, FibonacciTest
-  Seq(CSRTest) foreach { test =>
+    // BasicTest, BypassTest, BranchTest, FibonacciTest, CSRTest, TimerInterruptTest
+  Seq(TmpTest) foreach { test =>
     "Datapath" should s"pass $test" in {
       assert(TesterDriver execute (() => new DatapathTester(new Datapath, test)))
     }

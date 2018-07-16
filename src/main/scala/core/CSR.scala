@@ -318,9 +318,9 @@ class CSRFile() extends Module{
   io.interrupt := false.B
   //Interrupt Request
   val next_pc = Mux((io.sig.jal | io.sig.jalr | io.sig.branch), (io.pc >> 2 << 2), (io.pc >> 2 << 2) + 4.U(32.W))
-  when(io.ext_irq_r){ mip.meip := true.B} .otherwise { mip.meip := false.B }
-  when(io.tmr_irq_r){ mip.mtip := true.B} .otherwise { mip.mtip := false.B }
-  when(io.sft_irq_r){ mip.msip := true.B} .otherwise { mip.msip := false.B }
+  mip.meip := io.ext_irq_r
+  mip.mtip := io.tmr_irq_r
+  mip.msip := io.sft_irq_r
     
   //Handler
   when(io.expt){ //Exception Handler
@@ -387,5 +387,8 @@ class CSRFile() extends Module{
       mstatus.mpie := mstatus.mie
     }
   }
+
+  printf("mepc: %x, mcause: %x, mstatus: %x, mtvec: %x\n", mepc, mcause.asUInt, mstatus.asUInt, mtvec.asUInt)
+  printf("io info: expt[%x], interrupt[%x], evec[%x], epc[%x]\n", io.expt, io.interrupt, io.evec, io.epc)
 
 }

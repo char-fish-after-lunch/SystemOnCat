@@ -112,7 +112,7 @@ class Datapath() extends Module {
     val bypass_sources = IndexedSeq( // has priority !
         (true.B, 0.U, 0.U), // x0 = 0
         (ex_reg_valid && ex_ctrl_sigs.wb_en && !ex_ctrl_sigs.mem, ex_waddr, mem_reg_wdata),
-        (mem_reg_valid && mem_ctrl_sigs.wb_en, mem_waddr, wb_reg_wdata),
+        (mem_reg_valid && mem_ctrl_sigs.wb_en, mem_waddr, reg_write),
         (wb_reg_valid && wb_ctrl_sigs.wb_en, wb_waddr, wb_reg_wdata_forward))
 
     val id_bypass_src = id_raddr.map(raddr => bypass_sources.map(s => s._1 && s._2 === raddr))
@@ -144,7 +144,7 @@ class Datapath() extends Module {
     val bypass_mux = Seq(
         0.U -> 0.U,
         1.U -> mem_reg_wdata,
-        2.U -> wb_reg_wdata,
+        2.U -> reg_write,
         3.U -> wb_reg_wdata_forward
     )
     for (i <- 0 until id_raddr.size) {
