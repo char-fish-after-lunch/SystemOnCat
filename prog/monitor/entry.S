@@ -44,9 +44,9 @@ _entry:
     sw x31, 4*30(sp)
 
 
-    addi ra, a1, 0
+    addi ra, a0, 0
 
-    li a2, 0x3000
+    la a2, stack_top
     sw sp, 0(a2)
 
     addi x2, x0, 0
@@ -82,7 +82,7 @@ _entry:
 
     jalr ra, ra, 0
 
-    li ra, 0x3100
+    la ra, regs
     sw x1, 4*1(ra)
     sw x2, 4*2(ra)
     sw x3, 4*3(ra)
@@ -115,7 +115,7 @@ _entry:
     sw x30, 4*30(ra)
     sw x31, 4*31(ra)
 
-    li sp, 0x3100
+    la sp, stack_top
     lw sp, 0(sp)
 
     lw x1, 4*0(sp)
@@ -150,6 +150,11 @@ _entry:
     lw x30, 4*29(sp)
     lw x31, 4*30(sp)
 
-    li sp, 31*4
+    addi sp, sp, 31*4
 
     ret
+
+.section .data
+    .align 0x4
+stack_top:
+    .word 0x0

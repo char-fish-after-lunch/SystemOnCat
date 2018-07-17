@@ -2,9 +2,11 @@
 
 #define ADR_SERIAL_BUF 0xf004
 #define ADR_SERIAL_DAT 0xf000
-#define PUTCHAR(c) {while(!((*((char*)ADR_SERIAL_BUF)) & 0xf)); \
+#define PUTCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf)); \
     (*((char*)ADR_SERIAL_DAT) = (c));}
-#define GETCHAR(c) ((c) = *((char*)ADR_SERIAL_DAT))
+#define GETCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf0)); \
+    (c) = *((char*)ADR_SERIAL_DAT); }
+
 #define STR_PROMPT ">>> "
 #define bool int
 #define true 1
@@ -19,7 +21,7 @@
 extern void _entry(unsigned adr);
 
 
-void print(char* str){
+void print(const char* str){
     int i;
     for(i = 0; str[i]; i ++)
         PUTCHAR(str[i]);
@@ -40,6 +42,8 @@ void get_line(){
         ++ bn;
         GETCHAR(buffer[bn]);
     } while(buffer[bn] != '\n');
+    if(bn > 0 && buffer[bn - 1] == '\r')
+        -- bn;
     buffer[bn] = '\0';
 }
 
@@ -47,10 +51,11 @@ void hex2str(unsigned x){
     buffer[0] = '0'; buffer[1] = 'x';
     int i;
     for(i = 0; i < 8; i ++){
-        buffer[2 + i] = HEX[(x >> (i << 2)) & (0xf)];
+        buffer[2 + i] = HEX[(x >> ((7 - i) << 2)) & (0xf)];
     }
     buffer[10] = '\0';
 }
+
 
 unsigned hexchar2int(char c){
     if(c >= '0' && c <= '9')
@@ -97,6 +102,7 @@ void jump_exe(){
     if(!*c || !*(c+1))
         return;
     unsigned target_adr = str2hex(c);
+    hex2str(target_adr);
     _entry(target_adr);
 }
 
@@ -107,6 +113,7 @@ void reg_exe(){
         hex2str(i);
         print(buffer);
         print(")  =  ");
+        
         hex2str(regs[i]);
         print(buffer);
         print("\n");
@@ -124,10 +131,9 @@ void edit_exe(){
         print(buffer);
         print("] ");
         get_line();
-        c = next_word(buffer);
-        if(!*c || !*(c+1))
+        if(!*buffer || !*(buffer+1))
             break;
-        val = str2hex(c);
+        val = str2hex(buffer);
 
         *((unsigned*)adr) = val;
         adr += 4;
@@ -150,9 +156,8 @@ unsigned inst2int(char* c){
     int i, j;
     for(i = 0; i < INST_N; i ++){
         for(j = 0; INST_NAMES[i][j] && c[j] && INST_NAMES[i][j] == c[j]; j ++);
-        if(!INST_NAMES[i][j] || (!c[j] && c[j] != ' '))
-            return 0;
-        break;
+        if(!INST_NAMES[i][j] && (!c[j] || c[j] == ' '))
+            break;
     }
     if(i == INST_N)
         return 0;
@@ -232,12 +237,9 @@ void inst_exe(){
         print(buffer);
         print("] ");
         get_line();
-        c = next_word(buffer);
-        if(!*c || !*(c+1))
-            break;
-        val = inst2int(c);
+        val = inst2int(buffer);
         if(val == 0)
-            continue;
+            break;
 
         *((unsigned*)adr) = val;
         adr += 4;
@@ -249,13 +251,17 @@ void view_exe(){
     if(!*c || !*(c+1))
         return;
     unsigned adr = str2hex(c), val;
-    while(true){
+    c = next_word(c);
+    if(!*c || !*(c+1))
+        return;
+    unsigned cnt = str2hex(c);
+    while(cnt --){
         print("[");
         hex2str(adr);
         print(buffer);
         print("] ");
         val = *((unsigned*)adr);
-        hex2str(adr);
+        hex2str(val);
         print(buffer);
         print("\n");
         adr += 4;
@@ -281,6 +287,7 @@ void print_int2inst(unsigned val){
         print("<Invalid>");
         return;
     }
+    print(INST_NAMES[i]);
     if(itype == ITYPE_R || itype == ITYPE_I || itype == ITYPE_U || itype == ITYPE_J){
         print(" ");
         hex2str(GETBITS(val, 7, 11));
@@ -331,7 +338,11 @@ void disas_exe(){
     if(!*c || !*(c+1))
         return;
     unsigned adr = str2hex(c), val;
-    while(true){
+    c = next_word(c);
+    if(!*c || !*(c+1))
+        return;
+    unsigned cnt = str2hex(c);
+    while(cnt --){
         print("[");
         hex2str(adr);
         print(buffer);
@@ -344,14 +355,10 @@ void disas_exe(){
 }
 
 void start(){
-    // register unsigned cc = *((unsigned*)ADR_SERIAL_BUF);
-    // asm("nop;nop;nop;nop;nop;");
-    // *((char*)0x6000) = cc;
     print("Welcome to System on Cat!\n");
     print("Monitor v0.1\n");
 
     init();
-
     
     while(true){
         print(STR_PROMPT);
