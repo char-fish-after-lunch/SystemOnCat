@@ -104,7 +104,7 @@ class Datapath() extends Module {
     val regfile = Module(new RegFile)
     regfile.io.raddr1 := id_rs1
     regfile.io.raddr2 := id_rs2
-    regfile.io.wen := wb_ctrl_sigs.wb_en
+    regfile.io.wen := wb_ctrl_sigs.wb_en && wb_reg_valid
     regfile.io.waddr := wb_waddr
     val reg_write = Wire(UInt()) // assigned later
     regfile.io.wdata := reg_write
@@ -289,7 +289,10 @@ class Datapath() extends Module {
     wb_reg_wdata_forward := reg_write
     // temporary init
     // io.debug_devs.leds := alu.io.out
-    io.debug_devs.leds := Mux(io.debug_devs.dip_sw.orR, io.imem.inst, Cat(pc(7, 0), csr_epc(7, 0)))
+    io.debug_devs.leds := MuxLookup(io.debug_devs.dip_sw(1, 0), io.imem.inst, Seq(
+        1.U -> Cat(pc(7, 0), csr_epc(7, 0)), 
+        2.U -> Cat(io.dmem.rd_data(7, 0), io.dmem.wr_data(7, 0))
+    ))
     io.debug_devs.dpy0 := pc(7, 0)
     io.debug_devs.dpy1 := npc(7, 0)
 
