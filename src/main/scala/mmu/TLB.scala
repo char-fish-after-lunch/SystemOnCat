@@ -3,8 +3,6 @@ package systemoncat.mmu
 import chisel3._
 import chisel3.util._
 
-import MemoryConsts._
-
 class TLBEntry extends Bundle{
 	val tag = UInt(MemoryConsts.TLBTagLength.W)
 	val ppn = UInt(MemoryConsts.PPNLength.W)
@@ -98,6 +96,3 @@ class TLB extends Module{
 
 
 }
-
-
-
