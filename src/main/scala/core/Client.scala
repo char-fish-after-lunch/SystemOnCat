@@ -30,7 +30,7 @@ class Client() extends SysBusSlave(new ClientIrqIO()){
 
 	//Time Interrupt Register
 	// val cmpl = Reg(UInt(32.W))
-	val cmpl = RegInit(0.U(32.W))
+	val cmpl = RegInit(0xfffffff.U(32.W))
 	val cmph = RegInit(0.U(32.W))
 	val tmel = RegInit(0.U(32.W))
 	val tmeh = RegInit(0.U(32.W))

@@ -207,15 +207,13 @@ class Datapath() extends Module {
     csr.io.sig := wb_ctrl_sigs
     csr.io.inst := wb_reg_inst
 
-    val last_valid_pc_from_wb = Mux(wb_reg_valid, wb_reg_pc, 
-        Mux(mem_reg_valid, mem_reg_pc, 
+    val last_valid_pc_from_wb = Mux(mem_reg_valid, mem_reg_pc, 
         Mux(ex_reg_valid, ex_reg_pc, 
-        Mux(id_reg_valid, id_reg_pc, pc)))) 
+        Mux(id_reg_valid, id_reg_pc, pc)))
     // I guess there should be at least one valid instruction in pipeline...
-    csr_flush_vector := Mux(wb_reg_valid, "b1111".U, 
-        Mux(mem_reg_valid, "b1110".U, 
-        Mux(ex_reg_valid, "b1100".U, 
-        Mux(id_reg_valid, "b1000".U, "b0000".U)))) 
+    csr_flush_vector := Mux(mem_reg_valid, "b1111".U, 
+        Mux(ex_reg_valid, "b1110".U, 
+        Mux(id_reg_valid, "b1100".U, "b1000".U))) 
 
     csr.io.pc := last_valid_pc_from_wb
     csr.io.addr := 0.U(32.W) // TODO: after implementing i/d memory exception, this should be assigned
@@ -257,7 +255,7 @@ class Datapath() extends Module {
     // val expt = Output(Bool())     // Exception Occur
     // val evec = Output(UInt(32.W)) //Exception Handler Entry
 
-    val mem_has_interrupt = csr.io.interrupt || io.irq_client.sft_irq_r
+    val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
     mem_interp := mem_has_exception || mem_has_interrupt
     mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_reg_valid
@@ -291,7 +289,7 @@ class Datapath() extends Module {
     wb_reg_wdata_forward := reg_write
     // temporary init
     // io.debug_devs.leds := alu.io.out
-    io.debug_devs.leds := Mux(io.debug_devs.dip_sw.orR, io.imem.inst, alu.io.out)
+    io.debug_devs.leds := Mux(io.debug_devs.dip_sw.orR, io.imem.inst, Cat(pc(7, 0), csr_epc(7, 0)))
     io.debug_devs.dpy0 := pc(7, 0)
     io.debug_devs.dpy1 := npc(7, 0)
 
