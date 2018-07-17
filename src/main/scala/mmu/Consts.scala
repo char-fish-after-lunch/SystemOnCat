@@ -29,4 +29,9 @@ object MemoryConsts{
 	val Load = 1.U(2.W)
 	val PC = 2.U(2.W)
 	val Reserverd = 3.U(2.W)
+
+	//PTE Structure
+	//|------PPN(9)------|---RSW(2)---|D|A|G|U|X|W|R|V|
+	val RSWLength = 2
+	val PTEZero = 32 - PPNLength - RSWLength - 8
 }

@@ -20,6 +20,7 @@ class TLBIO extends Bundle{
 
 	val paddr = Output(UInt(MemoryConsts.PaLength.W))
 	val valid = Output(Bool())
+
 	//Page Fault Exception(Leave for PTW to solve)
 	//val iPF = Output(Bool())
 	//val lPF = Output(Bool())
@@ -82,6 +83,14 @@ class TLB extends Module{
 		io.ptw.refill_request := true.B
 	}
 	when (state === s_request){
+		when(io.ptw.finish){
+			state := s_ready
+		}
+		when(io.ptw.pf){
+			state := s_wait
+		}
+	}
+	when (state === s_wait){
 		when(io.ptw.finish){
 			state := s_ready
 		}

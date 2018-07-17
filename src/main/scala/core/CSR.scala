@@ -3,7 +3,7 @@ package systemoncat.core
 import chisel3._
 import chisel3.util._
 import chisel3.Bits._
-
+import systemoncat.mmu.MemoryConsts._
 
 object PRV
 {
@@ -79,6 +79,12 @@ class MStatus extends Bundle{
   val uie = Bool()
 }
 
+class SATP extends Bundle{ //For VM mapping
+  val mode = Bool()
+  val asid = UInt(9.W)
+  val ppn = UInt(22.W)
+}
+
 class DCSR extends Bundle { //Debug Registers
   val xdebugver = UInt(2.W)
   val zero4 = UInt(2.W)
@@ -143,19 +149,6 @@ class MTVEC() extends Bundle(){
   val mode = UInt(2.W)
 }
 
-/*
-class PTBR() { //For Page Table 
-  def pgLevelsToMode = 1
-  val modeBits = 1
-  val maxASIdBits = 9
-  
-  //require(modeBits + maxASIdBits + maxPAddrBits - pgIdxBits == xLen)
-
-  val mode = UInt(modeBits.W)
-  val asid = UInt(maxASIdBits.W)
-  val ppn = UInt((maxPAddrBits - pgIdxBits).W)
-}
-*/
 object CSR
 {
     def X = 0.U(3.W) //CSR operator type
@@ -208,10 +201,16 @@ class CSRFileIO() extends Bundle{
     val wb_csr_dat = Input(UInt(32.W))
     val read_csr_dat = Output(UInt(32.W))
 
+    //Interrupt Output
     val epc = Output(UInt(32.W))  //EPC
     val expt = Output(Bool())     // Exception Occur
     val interrupt = Output(Bool())   // Interrupt Occur
     val evec = Output(UInt(32.W)) //Exception Handler Entry
+
+    //VM Output
+    val baseppn = Output(UInt(PPNLength.W))
+    val asid = Output(UInt(ASIDLength.W))
+    val priv = Output(UInt(2.W))
 }
 
 class CSRFile() extends Module{
@@ -243,12 +242,15 @@ class CSRFile() extends Module{
   //Machine Cycle
   //val mcycle = Reg(UInt(32.W))   // 0xB00
   //val mcycleh = Reg(UInt(32.W))  // 0xB80
-  
+  val satp = Reg(new SATP)
   //Client Register (For software interrupt and time interrupt)
   //val mtime = Reg(UInt(32.W))
   //val mtimecmp = Reg(UInt(32.W))
   //val msip = Reg(UInt(32.W))
   //Read CSR
+  io.asid := satp.asid(ASIDLength - 1,0)
+  io.baseppn := satp.ppn(PPNLength - 1,0)
+  io.priv := prv
 
   io.read_csr_dat := 0.U(32.W)
   when(io.csr_ena & io.csr_rd_en){
@@ -259,7 +261,8 @@ class CSRFile() extends Module{
         "h305".U(12.W) -> mtvec.asUInt(),
         "h340".U(12.W) -> mscratch,
         "h341".U(12.W) -> mepc,
-        "h342".U(12.W) -> mcause
+        "h342".U(12.W) -> mcause,
+        "h180".U(12.W) -> satp.asUInt()
         // "hb00".U(12.W) -> mcycle,
         // "hb80".U(12.W) -> mcycleh,
     ))
@@ -285,7 +288,7 @@ class CSRFile() extends Module{
     }
     //.elsewhen(io.csr_idx === "h344".U(12.W)){ MIP is read only
       //mip := wb_dat
-    //} 
+    //}
     .elsewhen(io.csr_idx === "h305".U(12.W)){
       mtvec := wb_dat.asTypeOf(new MTVEC())
     } 
@@ -298,6 +301,9 @@ class CSRFile() extends Module{
     .elsewhen(io.csr_idx === "h342".U(12.W)){
       mcause := wb_dat
     } 
+    .elsewhen(io.csr_idx === "h180".U(12.W)){
+      satp := wb_dat.asTypeOf(new SATP())
+    }
     // .elsewhen(io.csr_idx === "hb00".U(12.W)){
     //   mcycle := wb_dat
     // } 
