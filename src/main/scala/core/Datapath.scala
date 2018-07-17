@@ -14,47 +14,48 @@ class DatapathIO() extends Bundle {
 class Datapath() extends Module {
     val io = IO(new DatapathIO())
 
-    val ex_ctrl_sigs = Reg(new ControlSignals)
-    val mem_ctrl_sigs = Reg(new ControlSignals)
-    val wb_ctrl_sigs = Reg(new ControlSignals)
+    val ex_ctrl_sigs = RegInit(0.U.asTypeOf(new ControlSignals))
+    val mem_ctrl_sigs = RegInit(0.U.asTypeOf(new ControlSignals))
+    val wb_ctrl_sigs = RegInit(0.U.asTypeOf(new ControlSignals))
 
-    val id_reg_valid = Reg(Bool()) // is a valid inst 
-    val ex_reg_valid = Reg(Bool())
-    val mem_reg_valid = Reg(Bool())
-    val wb_reg_valid = Reg(Bool())
+    val pc_reg_valid = RegInit(Bool(), false.B) // is a valid inst 
+    val id_reg_valid = RegInit(Bool(), false.B)
+    val ex_reg_valid = RegInit(Bool(), false.B)
+    val mem_reg_valid = RegInit(Bool(), false.B)
+    val wb_reg_valid = RegInit(Bool(), false.B)
 
-    val ex_reg_inst = Reg(Bits()) // original instruction
-    val mem_reg_inst = Reg(Bits())
-    val wb_reg_inst = Reg(Bits())
+    val ex_reg_inst = RegInit(Bits(), 0.U(32.W)) // original instruction
+    val mem_reg_inst = RegInit(Bits(), 0.U(32.W))
+    val wb_reg_inst = RegInit(Bits(), 0.U(32.W))
 
     val ex_waddr = ex_reg_inst(11,7) // rd can be directly extracted from inst
     val mem_waddr = mem_reg_inst(11,7)
     val wb_waddr = wb_reg_inst(11,7)
 
-    val ex_reg_cause = Reg(UInt(4.W)) // exception cause
-    val mem_reg_cause = Reg(UInt(4.W))
-    val wb_reg_cause = Reg(UInt(4.W))
+    val ex_reg_cause = RegInit(UInt(), 0.U(4.W)) // exception cause
+    val mem_reg_cause = RegInit(UInt(), 0.U(4.W))
+    val wb_reg_cause = RegInit(UInt(), 0.U(4.W))
 
-    val id_reg_pc = Reg(UInt())
-    val ex_reg_pc = Reg(UInt())
-    val mem_reg_pc = Reg(UInt())
-    val wb_reg_pc = Reg(UInt())
+    val id_reg_pc = RegInit(UInt(), 0.U(32.W))
+    val ex_reg_pc = RegInit(UInt(), 0.U(32.W))
+    val mem_reg_pc = RegInit(UInt(), 0.U(32.W))
+    val wb_reg_pc = RegInit(UInt(), 0.U(32.W))
 
-    val mem_reg_rs2 = Reg(UInt()) // used as store address
-    val dmem_reg = Reg(UInt())
+    val mem_reg_rs2 = RegInit(UInt(), 0.U(32.W)) // used as store address
+    val dmem_reg = RegInit(UInt(), 0.U(32.W))
 
-    val mem_reg_wdata = Reg(Bits()) // data for write back
-    val wb_reg_wdata = Reg(Bits())
-    val wb_reg_wdata_forward = Reg(Bits())
+    val mem_reg_wdata = RegInit(Bits(), 0.U(32.W)) // data for write back
+    val wb_reg_wdata = RegInit(Bits(), 0.U(32.W))
+    val wb_reg_wdata_forward = RegInit(Bits(), 0.U(32.W))
 
-    val ex_reg_imme = Reg(UInt()) // 32 bit immediate, sign extended if necessary
+    val ex_reg_imme = RegInit(UInt(), 0.U(32.W)) // 32 bit immediate, sign extended if necessary
 
     val csr_branch = Wire(Bool()) // when csr branch happens, all prev stages will be flushed
     val csr_flush_vector = Wire(Bits(4.W)) // whether pc, id, exe, mem should be flushed after csr branch
 
     // ---------- NPC ----------
-    val pc = RegInit(0.U(32.W)) // initial pc
-    val pc_valid = !(csr_branch && csr_flush_vector(3))
+    val pc = RegInit((-4).S(32.W).asUInt) // initial pc
+    pc_reg_valid := !(csr_branch && csr_flush_vector(3))
     val ex_branch_taken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
 
@@ -68,10 +69,10 @@ class Datapath() extends Module {
     val csr_evec = Wire(UInt())
     val mem_interp = Wire(Bool()) // used to flush pipeline at the end of MEM
 
-    val csr_reg_epc = Reg(UInt())
-    val wb_reg_eret = Reg(Bool())
-    val csr_reg_evec = Reg(UInt())
-    val wb_reg_interp = Reg(Bool()) // used to decide next pc at the beginning of WB
+    val csr_reg_epc = RegInit(UInt(), 0.U(32.W))
+    val wb_reg_eret = RegInit(Bool(), false.B)
+    val csr_reg_evec = RegInit(UInt(), 0.U(32.W))
+    val wb_reg_interp = RegInit(Bool(), false.B) // used to decide next pc at the beginning of WB
 
     val npc = Mux(wb_reg_interp, csr_reg_evec,
         Mux(wb_reg_eret, csr_reg_epc, 
@@ -91,7 +92,7 @@ class Datapath() extends Module {
     inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
     id_replay := id_exe_data_hazard || id_csr_data_hazard
-    id_reg_valid := ((!ex_branch_taken && !pc_stall) || id_replay) && (!(csr_branch && csr_flush_vector(2))) && pc_valid
+    id_reg_valid := ((!ex_branch_taken && !pc_stall && pc_reg_valid) || id_replay) && (!(csr_branch && csr_flush_vector(2)))
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
 
@@ -103,7 +104,7 @@ class Datapath() extends Module {
     val regfile = Module(new RegFile)
     regfile.io.raddr1 := id_rs1
     regfile.io.raddr2 := id_rs2
-    regfile.io.wen := wb_ctrl_sigs.wb_en
+    regfile.io.wen := wb_ctrl_sigs.wb_en && wb_reg_valid
     regfile.io.waddr := wb_waddr
     val reg_write = Wire(UInt()) // assigned later
     regfile.io.wdata := reg_write
@@ -206,15 +207,13 @@ class Datapath() extends Module {
     csr.io.sig := wb_ctrl_sigs
     csr.io.inst := wb_reg_inst
 
-    val last_valid_pc_from_wb = Mux(wb_reg_valid, wb_reg_pc, 
-        Mux(mem_reg_valid, mem_reg_pc, 
+    val last_valid_pc_from_wb = Mux(mem_reg_valid, mem_reg_pc, 
         Mux(ex_reg_valid, ex_reg_pc, 
-        Mux(id_reg_valid, id_reg_pc, pc)))) 
+        Mux(id_reg_valid, id_reg_pc, pc)))
     // I guess there should be at least one valid instruction in pipeline...
-    csr_flush_vector := Mux(wb_reg_valid, "b1111".U, 
-        Mux(mem_reg_valid, "b1110".U, 
-        Mux(ex_reg_valid, "b1100".U, 
-        Mux(id_reg_valid, "b1000".U, "b0000".U)))) 
+    csr_flush_vector := Mux(mem_reg_valid, "b1111".U, 
+        Mux(ex_reg_valid, "b1110".U, 
+        Mux(id_reg_valid, "b1100".U, "b1000".U))) 
 
     csr.io.pc := last_valid_pc_from_wb
     csr.io.addr := 0.U(32.W) // TODO: after implementing i/d memory exception, this should be assigned
@@ -256,7 +255,7 @@ class Datapath() extends Module {
     // val expt = Output(Bool())     // Exception Occur
     // val evec = Output(UInt(32.W)) //Exception Handler Entry
 
-    val mem_has_interrupt = csr.io.interrupt || io.irq_client.sft_irq_r
+    val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
     mem_interp := mem_has_exception || mem_has_interrupt
     mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_reg_valid
@@ -290,7 +289,10 @@ class Datapath() extends Module {
     wb_reg_wdata_forward := reg_write
     // temporary init
     // io.debug_devs.leds := alu.io.out
-    io.debug_devs.leds := Mux(io.debug_devs.dip_sw.orR, io.imem.inst, alu.io.out)
+    io.debug_devs.leds := MuxLookup(io.debug_devs.dip_sw(1, 0), io.imem.inst, Seq(
+        1.U -> Cat(pc(7, 0), csr_epc(7, 0)), 
+        2.U -> Cat(io.dmem.rd_data(7, 0), io.dmem.wr_data(7, 0))
+    ))
     io.debug_devs.dpy0 := pc(7, 0)
     io.debug_devs.dpy1 := npc(7, 0)
 

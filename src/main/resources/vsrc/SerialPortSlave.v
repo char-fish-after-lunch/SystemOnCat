@@ -71,7 +71,7 @@ end
 
 always @(posedge clk_bus) begin
     if(cyc_i && stb_i && !stall) begin
-        if(adr_i[0] == 0) begin
+        if(adr_i[2] == 0) begin
             if(we_i) begin
                 if(dat_send_ta + 1'b1 == dat_send_he) begin
                     ack <= 0;
@@ -157,7 +157,7 @@ assign err_o = (state == STATE_ERR);
 assign rty_o = 0;
 assign dat_o = {{24{1'b0}}, ans};
 
-assign stall = (state != STATE_IDLE) & ~ack;
+assign stall = (state != STATE_IDLE) & ~ack & (state != STATE_ERR);
 assign stall_o = stall;
 
 endmodule

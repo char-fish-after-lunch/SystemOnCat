@@ -1,4 +1,4 @@
-prog= fibonacci fib-memory helloworld serial-naive csr-wr timer_irq_sim tmp timer_irq
+prog= fibonacci fib-memory helloworld serial-naive csr-wr timer_irq_sim tmp timer_irq software_irq gg
 
 ifndef MARCH
 MARCH:=rv32i

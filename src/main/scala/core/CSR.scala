@@ -216,7 +216,7 @@ class CSRFileIO() extends Bundle{
 class CSRFile() extends Module{
   val io = IO(new CSRFileIO)
 
-  val prv = Reg(UInt(2.W))
+  val prv = RegInit(PRV.M)
 
   // Status Register
   val reset_mstatus = 0.U(32.W).asTypeOf(new MStatus())
@@ -225,19 +225,19 @@ class CSRFile() extends Module{
 //val mhartid = Reg(UInt(32.W))  // 0xF14
   
   // Interrupt Enable
-  val mie = Reg(new MIE)      // 0x304
+  val mie = RegInit(0.U(32.W).asTypeOf(new MIE))      // 0x304
   // Interrupt Waiting  
-  val mip = Reg(new MIP)         // 0x344
+  val mip = RegInit(0.U(32.W).asTypeOf(new MIP))         // 0x344
   // Interrupt Entry Address
   val mtvec = RegInit(0.U(32.W).asTypeOf(new MTVEC()))    // 0x305
   // Error Address
-  val mtval = Reg(UInt(32.W))
+  val mtval = RegInit(0.U(32.W))
   // Interrupt Temp Register
-  val mscratch = Reg(UInt(32.W)) // 0x340
+  val mscratch = RegInit(0.U(32.W)) // 0x340
   // Interrupt epc
-  val mepc = Reg(UInt(32.W))     // 0x341
+  val mepc = RegInit(0.U(32.W))     // 0x341
   // Interrupt Cause
-  val mcause = Reg(UInt(32.W))   // 0x342
+  val mcause = RegInit(0.U(32.W))   // 0x342
 
   //Machine Cycle
   //val mcycle = Reg(UInt(32.W))   // 0xB00
