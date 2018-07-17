@@ -23,9 +23,9 @@ class DMem extends Module {
     io.bus.req.addr := io.core.addr
     io.bus.req.data_wr := io.core.wr_data
 
-    val mem_type_reg = Reg(Bits())
-    val rd_reg = Reg(Bool())
-    val mask_reg = Reg(Bits())
+    val mem_type_reg = RegInit(MEM_X)
+    val rd_reg = RegInit(false.B)
+    val mask_reg = RegInit("b0000".U(4.W))
 
     val byte_masks = Seq(
         0.U(4.W) -> "b0001".U(4.W),
