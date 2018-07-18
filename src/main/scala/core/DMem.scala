@@ -10,6 +10,10 @@ class DMemCoreIO extends Bundle {
     val wr_en = Input(Bool())
     val rd_en = Input(Bool())
     val mem_type = Input(Bits(MEM_X.getWidth.W))
+    val wr_addr_invalid_expt = Output(Bool())
+    val rd_addr_invalid_expt = Output(Bool())
+    val wr_access_err_expt = Output(Bool())
+    val rd_access_err_expt = Output(Bool())
 }
 
 class DMemIO extends Bundle {
@@ -22,7 +26,9 @@ class DMem extends Module {
     val io = IO(new DMemIO)
 
     val mem_type_reg = RegInit(MEM_X)
+    val wr_reg = RegInit(false.B)
     val rd_reg = RegInit(false.B)
+    val addr_err_reg = RegInit(false.B)
     val mask_reg = RegInit("b0000".U(4.W))
 
     val byte_masks = Seq(
@@ -63,14 +69,22 @@ class DMem extends Module {
         MEM_W -> io.core.wr_data // 1111
     ))
 
+    val addr_err = MuxLookup(io.core.mem_type, false.B, Seq(
+        MEM_H -> (io.core.addr(0) =/= 0.U(1.W)), // half word r/w: must be 2-aligned
+        MEM_HU -> (io.core.addr(0) =/= 0.U(1.W)),
+        MEM_W -> (io.core.addr(1, 0) =/= 0.U(2.W)) // full word r/w: must be 4-aligned
+    ))
+
     io.bus.req.sel := mask
-    io.bus.req.wen := io.core.wr_en
-    io.bus.req.ren := io.core.rd_en
+    io.bus.req.wen := io.core.wr_en && (!addr_err)
+    io.bus.req.ren := io.core.rd_en && (!addr_err)
     io.bus.req.addr := io.core.addr
     io.bus.req.data_wr := wr_data
 
     mem_type_reg := io.core.mem_type
+    wr_reg := io.core.wr_en
     rd_reg := io.core.rd_en
+    addr_err_reg := addr_err
     mask_reg := mask
 
     val bus_data = io.bus.res.data_rd
@@ -92,4 +106,9 @@ class DMem extends Module {
         MEM_HU -> Cat(Fill(16, 0.U(1.W)), hword_data(15, 0))
     ))
     io.core.rd_data := Mux(rd_reg, ext_data, 0.U(32.W))
+
+    io.core.wr_addr_invalid_expt := wr_reg && addr_err_reg
+    io.core.wr_access_err_expt := wr_reg && (!addr_err_reg) && io.bus.res.err
+    io.core.rd_addr_invalid_expt := rd_reg && addr_err_reg
+    io.core.rd_access_err_expt := rd_reg && (!addr_err_reg) && io.bus.res.err
 }
