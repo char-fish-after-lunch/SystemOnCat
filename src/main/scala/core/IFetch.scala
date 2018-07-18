@@ -23,7 +23,7 @@ class IFetch extends Module {
     io.bus.req.data_wr := 0.U(32.W)
     io.bus.req.sel := 15.U(4.W)
     io.bus.req.wen := false.B
-    io.bus.req.ren := Mux(pc_invalid, false.B, true.B)
+    io.bus.req.ren := !pc_invalid
 
     val pc_reg_invalid = RegInit(Bool(), false.B)    
 

@@ -24,6 +24,18 @@ class Datapath() extends Module {
     val mem_reg_valid = RegInit(Bool(), false.B)
     val wb_reg_valid = RegInit(Bool(), false.B)
 
+    val id_functioning = Wire(Bool()) // is allowed to execute
+    val ex_functioning = Wire(Bool())
+    val mem_functioning = Wire(Bool())
+    val wb_functioning = Wire(Bool())
+    // a stage A can be invalid because:
+    //   1. pipeline has been stalled / flushed, stage A is keeping garbage data.
+    //   2. this instruction raised(will raise) an exception.
+    // in both cases, the instruction should not be allowed to r/w memory & registers,
+    // but in case 2, the exception caused by inst should be passed into CSR, while in case 1 we shouldn't.
+    // that's why we need 2 signals(valid & functioning) for each stage.
+
+
     val ex_reg_inst = RegInit(Bits(), NOP) // original instruction
     val mem_reg_inst = RegInit(Bits(), NOP)
     val wb_reg_inst = RegInit(Bits(), NOP)
@@ -34,14 +46,21 @@ class Datapath() extends Module {
 
     val pc_expt = Wire(Bool())
     val id_reg_expt = RegInit(Bool(), false.B) // has exception
+    val id_expt = Wire(Bool())
     val ex_reg_expt = RegInit(Bool(), false.B)
     val mem_reg_expt = RegInit(Bool(), false.B)
     val mem_expt = Wire(Bool())
+    val wb_reg_expt = RegInit(Bool(), false.B)
 
     val id_reg_cause = RegInit(UInt(), 0.U(4.W)) // exception cause
     val ex_reg_cause = RegInit(UInt(), 0.U(4.W))
     val mem_reg_cause = RegInit(UInt(), 0.U(4.W))
     val mem_cause = Wire(UInt(4.W))
+
+    val id_reg_expt_val = RegInit(UInt(), 0.U(32.W)) // addr stored for mtval
+    val ex_reg_expt_val = RegInit(UInt(), 0.U(32.W))
+    val mem_reg_expt_val = RegInit(UInt(), 0.U(32.W))
+    val mem_expt_val = RegInit(UInt(), 0.U(32.W))
 
     val id_reg_pc = RegInit(UInt(), 0.U(32.W))
     val ex_reg_pc = RegInit(UInt(), 0.U(32.W))
@@ -100,13 +119,17 @@ class Datapath() extends Module {
     inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
     id_replay := id_exe_data_hazard || id_csr_data_hazard
-    id_reg_valid := ((!ex_branch_taken && !pc_stall && pc_reg_valid && (!pc_expt)) || id_replay) && (!(csr_branch && csr_flush_vector(2)))
+    id_reg_valid := ((!ex_branch_taken && !pc_stall && pc_reg_valid) || id_replay) && (!(csr_branch && csr_flush_vector(2)))
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
     
-    id_reg_expt := pc_expt
+    id_reg_expt := pc_expt && pc_reg_valid
     id_reg_cause := Mux(io.imem.pc_invalid_expt, Cause.IAM(3, 0), 
         Mux(io.imem.pc_err_expt, Cause.IAF(3, 0), 0.U(4.W)))
+    id_reg_expt_val := Mux(pc_expt, pc, 0.U(32.W))
+
+    id_expt := id_reg_expt || (!io.ctrl.sig.legal)
+    id_functioning := id_reg_valid && (!id_expt)
 
     val id_rs1 = inst_reg(19, 15) // rs1
     val id_rs2 = inst_reg(24, 20) // rs2
@@ -116,7 +139,7 @@ class Datapath() extends Module {
     val regfile = Module(new RegFile)
     regfile.io.raddr1 := id_rs1
     regfile.io.raddr2 := id_rs2
-    regfile.io.wen := wb_ctrl_sigs.wb_en && wb_reg_valid
+    regfile.io.wen := wb_ctrl_sigs.wb_en && wb_functioning
     regfile.io.waddr := wb_waddr
     val reg_write = Wire(UInt()) // assigned later
     regfile.io.wdata := reg_write
@@ -125,34 +148,38 @@ class Datapath() extends Module {
     val id_rdatas = IndexedSeq(regfile.io.rdata1, regfile.io.rdata2)
     val bypass_sources = IndexedSeq( // has priority !
         (true.B, 0.U, 0.U), // x0 = 0
-        (ex_reg_valid && ex_ctrl_sigs.wb_en && !ex_ctrl_sigs.mem, ex_waddr, mem_reg_wdata),
-        (mem_reg_valid && mem_ctrl_sigs.wb_en, mem_waddr, reg_write),
-        (wb_reg_valid && wb_ctrl_sigs.wb_en, wb_waddr, wb_reg_wdata_forward))
+        (ex_functioning && ex_ctrl_sigs.wb_en && !ex_ctrl_sigs.mem, ex_waddr, mem_reg_wdata),
+        (mem_functioning && mem_ctrl_sigs.wb_en, mem_waddr, reg_write),
+        (wb_functioning && wb_ctrl_sigs.wb_en, wb_waddr, wb_reg_wdata_forward))
 
     val id_bypass_src = id_raddr.map(raddr => bypass_sources.map(s => s._1 && s._2 === raddr))
-    id_exe_data_hazard := ex_reg_valid && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.mem &&
+    id_exe_data_hazard := ex_functioning && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.mem &&
         ((io.ctrl.sig.rxs1 && ex_waddr === id_rs1) || (io.ctrl.sig.rxs2 && ex_waddr === id_rs2)) 
     // if a data loaded from RAM is immediately used, pipeline must be stalled
 
-    id_csr_data_hazard := (ex_reg_valid && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.csr_cmd =/= CSR.N &&
+    id_csr_data_hazard := (ex_functioning && ex_ctrl_sigs.wb_en && ex_ctrl_sigs.csr_cmd =/= CSR.N &&
         ((io.ctrl.sig.rxs1 && ex_waddr === id_rs1) || (io.ctrl.sig.rxs2 && ex_waddr === id_rs2))) ||
-        (mem_reg_valid && mem_ctrl_sigs.wb_en && mem_ctrl_sigs.csr_cmd =/= CSR.N &&
+        (mem_functioning && mem_ctrl_sigs.wb_en && mem_ctrl_sigs.csr_cmd =/= CSR.N &&
         ((io.ctrl.sig.rxs1 && mem_waddr === id_rs1) || (io.ctrl.sig.rxs2 && mem_waddr === id_rs2)))
     // data loaded from CSR can only be used after 2 clocks, pipeline must be stalled before that
 
     // ---------- EXE ----------
     // regs update
-    when (id_reg_valid) {
+    when (id_functioning) {
         ex_ctrl_sigs := io.ctrl.sig
         ex_reg_imme := id_imme
         ex_reg_inst := inst_reg
         ex_reg_pc := id_reg_pc
     }
     ex_reg_valid := (!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard) && 
-        (!(csr_branch && csr_flush_vector(1))) && (!id_csr_data_hazard) && (!id_reg_expt)
-    ex_reg_expt := id_reg_expt || io.ctrl.sig.illegal
-    ex_reg_cause := Mux(id_reg_expt, id_reg_cause, 
-        Mux(io.ctrl.sig.illegal, Cause.II(3, 0), 0.U(4.W)))
+        (!(csr_branch && csr_flush_vector(1))) && (!id_csr_data_hazard)
+    ex_reg_expt := id_expt && id_reg_valid
+    ex_reg_cause := Mux(id_reg_expt && id_reg_valid, id_reg_cause,
+        Mux((!io.ctrl.sig.legal), Cause.II(3, 0), 0.U(4.W)))
+
+    ex_reg_expt_val := Mux(id_reg_expt && id_reg_valid, id_reg_expt_val, 0.U(4.W))
+
+    ex_functioning := ex_reg_valid && (!ex_reg_expt)
 
     // bypass logic
     val ex_reg_rs_bypass = Reg(Vec(id_raddr.size, Bool())) // if this reg can be bypassed
@@ -189,7 +216,7 @@ class Datapath() extends Module {
     alu.io.in1 := ex_op1
     alu.io.in2 := ex_op2
 
-    ex_branch_taken := ex_reg_valid && ((alu.io.cmp_out && ex_ctrl_sigs.branch) || 
+    ex_branch_taken := ex_functioning && ((alu.io.cmp_out && ex_ctrl_sigs.branch) || 
         ex_ctrl_sigs.jal || ex_ctrl_sigs.jalr)
 
     ex_branch_target := Mux(ex_ctrl_sigs.jalr,
@@ -197,7 +224,7 @@ class Datapath() extends Module {
 
     // ---------- MEM ----------
     // regs update
-    when (ex_reg_valid) {
+    when (ex_functioning) {
         mem_ctrl_sigs := ex_ctrl_sigs
         mem_reg_pc := ex_reg_pc
         mem_reg_inst := ex_reg_inst
@@ -208,26 +235,32 @@ class Datapath() extends Module {
 
 
 
-    mem_reg_valid := ex_reg_valid && (!(csr_branch && csr_flush_vector(0))) && (!ex_reg_expt)
+    mem_reg_valid := ex_reg_valid && (!(csr_branch && csr_flush_vector(0)))
 
     io.dmem.wr_data := ex_rs(1)
     io.dmem.addr := alu.io.out
-    io.dmem.wr_en := ex_reg_valid && ex_ctrl_sigs.mem && isWrite(ex_ctrl_sigs.mem_cmd)
-    io.dmem.rd_en := ex_reg_valid && ex_ctrl_sigs.mem && isRead(ex_ctrl_sigs.mem_cmd)
+    io.dmem.wr_en := ex_functioning && ex_ctrl_sigs.mem && isWrite(ex_ctrl_sigs.mem_cmd)
+    io.dmem.rd_en := ex_functioning && ex_ctrl_sigs.mem && isRead(ex_ctrl_sigs.mem_cmd)
     io.dmem.mem_type := ex_ctrl_sigs.mem_type
 
-    mem_reg_expt := ex_reg_expt
+    mem_reg_expt := ex_reg_expt && ex_reg_valid
     mem_reg_cause := ex_reg_cause // no exception would happen during EXE
+    mem_reg_expt_val := ex_reg_expt_val
 
-    mem_expt := mem_reg_expt || io.dmem.wr_addr_invalid_expt || io.dmem.wr_access_err_expt ||
+    mem_expt := (mem_reg_expt && mem_reg_valid) || io.dmem.wr_addr_invalid_expt || io.dmem.wr_access_err_expt ||
          io.dmem.rd_addr_invalid_expt || io.dmem.rd_access_err_expt
     // this is a wire, so that exception can be handled before next posclk
 
-    mem_cause := Mux(mem_reg_expt, mem_reg_cause, 
+    mem_cause := Mux(mem_reg_expt && mem_reg_valid, mem_reg_cause, 
         Mux(io.dmem.wr_addr_invalid_expt, Cause.SAM(3, 0), 
         Mux(io.dmem.rd_addr_invalid_expt, Cause.LAM(3, 0),
         Mux(io.dmem.wr_access_err_expt, Cause.SAF(3, 0), 
         Mux(io.dmem.rd_access_err_expt, Cause.LAF(3, 0), 0.U(4.W))))))
+
+    mem_expt_val := Mux(mem_reg_expt && mem_reg_valid, mem_reg_expt_val,
+        Mux(mem_expt, alu.io.out, 0.U(32.U)))
+    
+    mem_functioning := mem_reg_valid && (!mem_expt)
 
     // ---------- CSR & Interrupt Client -----------
     val csr = Module(new CSRFile)
@@ -238,16 +271,18 @@ class Datapath() extends Module {
         Mux(ex_reg_valid, ex_reg_pc, 
         Mux(id_reg_valid, id_reg_pc, pc)))
     // I guess there should be at least one valid instruction in pipeline...
+    // also, even if the instruction will cause an exception, it's still valid.
+    // so we check 'valid' instead of 'functioning' here.
     csr_flush_vector := Mux(mem_reg_valid, "b1111".U, 
         Mux(ex_reg_valid, "b1110".U, 
         Mux(id_reg_valid, "b1100".U, "b1000".U))) 
 
     csr.io.pc := last_valid_pc_from_wb
-    csr.io.addr := 0.U(32.W) // TODO: after implementing i/d memory exception, this should be assigned
+    csr.io.addr := mem_expt_val
 
-    csr.io.csr_ena := wb_reg_valid && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
-    csr.io.csr_rd_en := wb_reg_valid && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
-    csr.io.csr_wr_en := wb_reg_valid && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
+    csr.io.csr_ena := wb_functioning && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
+    csr.io.csr_rd_en := wb_functioning && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
+    csr.io.csr_wr_en := wb_functioning && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
 
     csr.io.csr_idx := wb_reg_inst(31,20)
 
@@ -255,18 +290,18 @@ class Datapath() extends Module {
     csr.io.sft_irq_r := io.irq_client.sft_irq_r
     csr.io.tmr_irq_r := io.irq_client.tmr_irq_r
 
-    csr.io.csr_cmd := Mux(wb_reg_valid, wb_ctrl_sigs.csr_cmd, CSR.N)
+    csr.io.csr_cmd := Mux(wb_functioning, wb_ctrl_sigs.csr_cmd, CSR.N)
 
-    csr.io.pcIv := mem_expt && (mem_cause === Cause.IAM(3, 0))
-    csr.io.instIv := mem_expt && (mem_cause === Cause.II(3, 0))
-    csr.io.laddrIv := mem_expt && (mem_cause === Cause.LAM(3, 0))
-    csr.io.saddrIv := mem_expt && (mem_cause === Cause.SAM(3, 0))
+    csr.io.pcIv := mem_expt && (mem_cause === Cause.IAM(3, 0)) && mem_reg_valid
+    csr.io.instIv := mem_expt && (mem_cause === Cause.II(3, 0)) && mem_reg_valid
+    csr.io.laddrIv := mem_expt && (mem_cause === Cause.LAM(3, 0)) && mem_reg_valid
+    csr.io.saddrIv := mem_expt && (mem_cause === Cause.SAM(3, 0)) && mem_reg_valid
     
     // Trap Instruction
     val wb_is_eret = wb_reg_inst === MRET || wb_reg_inst === URET || wb_reg_inst === SRET
-    csr.io.isEcall := wb_reg_inst === ECALL && wb_reg_valid
-    csr.io.isEbreak := wb_reg_inst === EBREAK && wb_reg_valid
-    csr.io.isEret := wb_is_eret && wb_reg_valid
+    csr.io.isEcall := wb_reg_inst === ECALL && wb_functioning
+    csr.io.isEbreak := wb_reg_inst === EBREAK && wb_functioning
+    csr.io.isEret := wb_is_eret && wb_functioning
     
     // page Fault. TODO: this should be assigned after implementing MMU
     csr.io.iPF := false.B //Instruction Page Fault 
@@ -285,7 +320,7 @@ class Datapath() extends Module {
     val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
     mem_interp := mem_has_exception || mem_has_interrupt
-    mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_reg_valid
+    mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_functioning
     csr_branch := mem_interp || mem_eret
     csr_epc := csr.io.epc
     csr_evec := csr.io.evec
@@ -296,7 +331,7 @@ class Datapath() extends Module {
     csr_reg_evec := csr_evec
 
     // ---------- WB -----------
-    when (mem_reg_valid) {
+    when (mem_functioning) {
         wb_ctrl_sigs := mem_ctrl_sigs
         wb_reg_pc := mem_reg_pc
         wb_reg_inst := mem_reg_inst
@@ -304,6 +339,9 @@ class Datapath() extends Module {
     }
 
     wb_reg_valid := mem_reg_valid
+    wb_reg_expt := mem_expt && mem_reg_valid
+    wb_functioning := wb_reg_valid && (!wb_reg_expt)
+
     dmem_reg := io.dmem.rd_data
 
     reg_write := MuxLookup(wb_ctrl_sigs.wb_sel, wb_reg_wdata, Seq(

@@ -1,4 +1,4 @@
-prog= timer_irq_sim timer_irq software_irq
+prog= timer_irq_sim timer_irq software_irq exception
 
 ifndef MARCH
 MARCH:=rv32i

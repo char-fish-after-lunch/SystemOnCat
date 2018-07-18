@@ -152,12 +152,38 @@ object DatapathTestSpecs extends TestUtils {
 
     val tmp_test_insts = Seq(
         0x00000013.S(32.W),
-        0x00c00113.S(32.W),
-        0x00012083.S(32.W),
-        0x00112423.S(32.W),
+        0x00000097.S(32.W),
+        0x02408093.S(32.W),
+        0x30509073.S(32.W),
+        0x02004a37.S(32.W),
+        0x0000f537.S(32.W),
+        0x04000293.S(32.W),
+        0x30045073.S(32.W),
+        0x30445073.S(32.W),
+        0x0240006f.S(32.W),
+        0x00552023.S(32.W),
+        0x34202273.S(32.W),
+        0x03020213.S(32.W),
+        0x00452023.S(32.W),
+        0x00000313.S(32.W),
+        0x34431073.S(32.W),
+        0x30200073.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
+        0x00001bb7.S(32.W),
+        0x001b8b93.S(32.W),
+        0x005ba023.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0xff9ff06f.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W)
     )
 
     val empty_test_alu_results = Seq(
@@ -210,6 +236,8 @@ class TestIFetch(testType: => DatapathTest) extends Module with TestUtils {
     reg_pc := io.core.pc(31, 2)
     io.core.inst := VecInit(test_insts)(reg_pc).asUInt
     io.core.locked := io.locked
+    io.core.pc_invalid_expt := false.B
+    io.core.pc_err_expt := false.B
 }
 
 class TestDMemIO extends Bundle {
@@ -220,6 +248,11 @@ class TestDMemIO extends Bundle {
 class TestDMem() extends Module with TestUtils {
     val io = IO(new TestDMemIO)
     io.core.rd_data := 0x1010.U(32.W)
+    io.core.wr_addr_invalid_expt = false.B
+    io.core.rd_addr_invalid_expt = false.B
+    io.core.wr_access_err_expt = false.B
+    io.core.rd_access_err_expt = false.B
+
     when (io.core.wr_en) {
         printf("mem access write: [%x] -> %x \n", io.core.addr, io.core.wr_data)
     }
@@ -283,7 +316,7 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
 
 class DatapathTests extends org.scalatest.FlatSpec {
     // BasicTest, BypassTest, BranchTest, FibonacciTest, CSRTest, TimerInterruptTest, TmpTest
-  Seq(TimerInterruptTest) foreach { test =>
+  Seq(TmpTest) foreach { test =>
     "Datapath" should s"pass $test" in {
       assert(TesterDriver execute (() => new DatapathTester(new Datapath, test)))
     }
