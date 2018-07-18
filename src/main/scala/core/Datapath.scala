@@ -82,8 +82,11 @@ class Datapath() extends Module {
     // ---------- NPC ----------
     val pc = RegInit((-4).S(32.W).asUInt) // initial pc
     pc_reg_valid := !(csr_branch && csr_flush_vector(3))
-    val ex_branch_taken = Wire(Bool())
+    val ex_branch_mistaken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
+
+    val id_jump_expected = Wire(Bool())
+    val id_branch_target = Wire(UInt())
 
     val id_exe_data_hazard = Wire(Bool())
     val id_csr_data_hazard = Wire(Bool())
@@ -100,10 +103,11 @@ class Datapath() extends Module {
     val csr_reg_evec = RegInit(UInt(), 0.U(32.W))
     val wb_reg_interp = RegInit(Bool(), false.B) // used to decide next pc at the beginning of WB
 
-    val npc = Mux(wb_reg_interp, csr_reg_evec,
-        Mux(wb_reg_eret, csr_reg_epc, 
-        Mux(ex_branch_taken, ex_branch_target,
-        Mux(pc_stall, pc, pc + 4.U))))
+    val npc = Mux(wb_reg_interp, csr_reg_evec, // an interrupt/exception happened
+        Mux(wb_reg_eret, csr_reg_epc,  // eret executed
+        Mux(ex_branch_mistaken, ex_branch_target, // branch prediction failed
+        Mux(id_jump_expected, id_branch_target, // branch prediction
+        Mux(pc_stall, pc, pc + 4.U))))) // pc stall
     pc := npc
     val inst_reg = RegInit(NOP) // instruction in IF
 
@@ -119,7 +123,8 @@ class Datapath() extends Module {
     inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
     id_replay := id_exe_data_hazard || id_csr_data_hazard
-    id_reg_valid := ((!ex_branch_taken && !pc_stall && pc_reg_valid) || id_replay) && (!(csr_branch && csr_flush_vector(2)))
+    id_reg_valid := ((!id_jump_expected && !ex_branch_mistaken && !pc_stall && pc_reg_valid) || id_replay) &&
+         (!(csr_branch && csr_flush_vector(2)))
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
     
@@ -163,6 +168,12 @@ class Datapath() extends Module {
         ((io.ctrl.sig.rxs1 && mem_waddr === id_rs1) || (io.ctrl.sig.rxs2 && mem_waddr === id_rs2)))
     // data loaded from CSR can only be used after 2 clocks, pipeline must be stalled before that
 
+    id_jump_expected := id_reg_valid && ((io.ctrl.sig.branch && inst_reg(31)) || io.ctrl.sig.jal)
+    id_branch_target := id_reg_pc + id_imme
+    // when jumping backwards, assume the branch will be taken (suggested static branch in risc-v spec)
+    // reasonably, jal is always predicted taken
+    // however, the branch target of jalr cannot be confirmed till EXE, so it's ignored.
+
     // ---------- EXE ----------
     // regs update
     when (id_functioning) {
@@ -171,7 +182,7 @@ class Datapath() extends Module {
         ex_reg_inst := inst_reg
         ex_reg_pc := id_reg_pc
     }
-    ex_reg_valid := (!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard) && 
+    ex_reg_valid := (!ex_branch_mistaken) && id_reg_valid && (!id_exe_data_hazard) && 
         (!(csr_branch && csr_flush_vector(1))) && (!id_csr_data_hazard)
     ex_reg_expt := id_expt && id_reg_valid
     ex_reg_cause := Mux(id_reg_expt && id_reg_valid, id_reg_cause,
@@ -216,11 +227,13 @@ class Datapath() extends Module {
     alu.io.in1 := ex_op1
     alu.io.in2 := ex_op2
 
-    ex_branch_taken := ex_functioning && ((alu.io.cmp_out && ex_ctrl_sigs.branch) || 
-        ex_ctrl_sigs.jal || ex_ctrl_sigs.jalr)
+    val ex_branch_mispredicted = Mux(ex_ctrl_sigs.branch, ex_reg_imme(31) ^ alu.io.cmp_out, // mistaken if pred =/= real 
+        Mux(ex_ctrl_sigs.jal, false.B, // jal is always taken
+        Mux(ex_ctrl_sigs.jalr, true.B, false.B))) // jalr is always not taken
+    ex_branch_mistaken := ex_functioning && ex_branch_mispredicted
 
-    ex_branch_target := Mux(ex_ctrl_sigs.jalr,
-            alu.io.out, ex_reg_pc + ex_reg_imme)
+    ex_branch_target := Mux(ex_ctrl_sigs.jalr, alu.io.out,
+        Mux(ex_ctrl_sigs.branch, Mux(alu.io.cmp_out, ex_reg_pc + ex_reg_imme, ex_reg_pc + 4.U), 0.U(32.W)))
 
     // ---------- MEM ----------
     // regs update
@@ -376,7 +389,7 @@ class Datapath() extends Module {
     printf("regs ind: (%x, %x)\n", id_rs1, id_rs2)
     // 
 
-    printf("ex_branch_target: (%x, taken: %x), ", ex_branch_target, ex_branch_taken)
+    printf("ex_branch_target: (%x, taken: %x), ", ex_branch_target, ex_branch_mistaken)
     printf("pc_stall: %x, io.imem.locked: %x\n", pc_stall, io.imem.locked)
 
 }
