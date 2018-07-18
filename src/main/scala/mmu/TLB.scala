@@ -41,7 +41,7 @@ class TLB extends Module{
 
 	//Refill Store
 	val refill_tag = Reg(UInt(MemoryConsts.TLBTagLength.W))
-	val refill_offset = Reg(UInt(MemoryConsts.PageOffset.W))
+	val refill_offset = Reg(UInt(MemoryConsts.OffsetLength.W))
 	val refill_index = Reg(UInt(MemoryConsts.TLBIndexLength.W))
 
 	//TLB init
@@ -84,15 +84,16 @@ class TLB extends Module{
 		when(io.ptw.finish){
 			state := s_ready
 		}
-		when(io.ptw.pf){
-			state := s_wait
-		}
+		//when(io.ptw.pf){
+		//	state := s_wait
+		//}
 	}
-	when (state === s_wait){
-		when(io.ptw.finish){
-			state := s_ready
-		}
-	}
+	
+	//when (state === s_wait){
+	//	when(io.ptw.finish){
+	//		state := s_ready
+	//	}
+	//}
 
 
 }
