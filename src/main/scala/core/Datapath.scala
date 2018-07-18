@@ -24,17 +24,24 @@ class Datapath() extends Module {
     val mem_reg_valid = RegInit(Bool(), false.B)
     val wb_reg_valid = RegInit(Bool(), false.B)
 
-    val ex_reg_inst = RegInit(Bits(), 0.U(32.W)) // original instruction
-    val mem_reg_inst = RegInit(Bits(), 0.U(32.W))
-    val wb_reg_inst = RegInit(Bits(), 0.U(32.W))
+    val ex_reg_inst = RegInit(Bits(), NOP) // original instruction
+    val mem_reg_inst = RegInit(Bits(), NOP)
+    val wb_reg_inst = RegInit(Bits(), NOP)
 
     val ex_waddr = ex_reg_inst(11,7) // rd can be directly extracted from inst
     val mem_waddr = mem_reg_inst(11,7)
     val wb_waddr = wb_reg_inst(11,7)
 
-    val ex_reg_cause = RegInit(UInt(), 0.U(4.W)) // exception cause
+    val pc_expt = Wire(Bool())
+    val id_reg_expt = RegInit(Bool(), false.B) // has exception
+    val ex_reg_expt = RegInit(Bool(), false.B)
+    val mem_reg_expt = RegInit(Bool(), false.B)
+    val mem_expt = Wire(Bool())
+
+    val id_reg_cause = RegInit(UInt(), 0.U(4.W)) // exception cause
+    val ex_reg_cause = RegInit(UInt(), 0.U(4.W))
     val mem_reg_cause = RegInit(UInt(), 0.U(4.W))
-    val wb_reg_cause = RegInit(UInt(), 0.U(4.W))
+    val mem_cause = Wire(UInt(4.W))
 
     val id_reg_pc = RegInit(UInt(), 0.U(32.W))
     val ex_reg_pc = RegInit(UInt(), 0.U(32.W))
@@ -88,13 +95,18 @@ class Datapath() extends Module {
     // regs update
 
     io.ctrl.inst := inst_reg
+    pc_expt := io.imem.pc_invalid_expt || io.imem.pc_err_expt
     
     inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
     id_replay := id_exe_data_hazard || id_csr_data_hazard
-    id_reg_valid := ((!ex_branch_taken && !pc_stall && pc_reg_valid) || id_replay) && (!(csr_branch && csr_flush_vector(2)))
+    id_reg_valid := ((!ex_branch_taken && !pc_stall && pc_reg_valid && (!pc_expt)) || id_replay) && (!(csr_branch && csr_flush_vector(2)))
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
+    
+    id_reg_expt := pc_expt
+    id_reg_cause := Mux(io.imem.pc_invalid_expt, Cause.IAM(3, 0), 
+        Mux(io.imem.pc_err_expt, Cause.IAF(3, 0), 0.U(4.W)))
 
     val id_rs1 = inst_reg(19, 15) // rs1
     val id_rs2 = inst_reg(24, 20) // rs2
@@ -136,8 +148,11 @@ class Datapath() extends Module {
         ex_reg_inst := inst_reg
         ex_reg_pc := id_reg_pc
     }
-    ex_reg_valid := (!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard) && (!(csr_branch && csr_flush_vector(1))) && (!id_csr_data_hazard)
-    // TODO: check valid (stall logic related)
+    ex_reg_valid := (!ex_branch_taken) && id_reg_valid && (!id_exe_data_hazard) && 
+        (!(csr_branch && csr_flush_vector(1))) && (!id_csr_data_hazard) && (!id_reg_expt)
+    ex_reg_expt := id_reg_expt || io.ctrl.sig.illegal
+    ex_reg_cause := Mux(id_reg_expt, id_reg_cause, 
+        Mux(io.ctrl.sig.illegal, Cause.II(3, 0), 0.U(4.W)))
 
     // bypass logic
     val ex_reg_rs_bypass = Reg(Vec(id_raddr.size, Bool())) // if this reg can be bypassed
@@ -189,18 +204,30 @@ class Datapath() extends Module {
         mem_reg_rs2 := ex_rs(1)
         mem_reg_wdata := alu.io.out
     }
-    
     // alu.io.cmp_out decides whether a branch is taken
 
 
 
-    mem_reg_valid := ex_reg_valid && (!(csr_branch && csr_flush_vector(0))) // TODO: check valid (stall logic related)
+    mem_reg_valid := ex_reg_valid && (!(csr_branch && csr_flush_vector(0))) && (!ex_reg_expt)
 
     io.dmem.wr_data := ex_rs(1)
     io.dmem.addr := alu.io.out
     io.dmem.wr_en := ex_reg_valid && ex_ctrl_sigs.mem && isWrite(ex_ctrl_sigs.mem_cmd)
     io.dmem.rd_en := ex_reg_valid && ex_ctrl_sigs.mem && isRead(ex_ctrl_sigs.mem_cmd)
     io.dmem.mem_type := ex_ctrl_sigs.mem_type
+
+    mem_reg_expt := ex_reg_expt
+    mem_reg_cause := ex_reg_cause // no exception would happen during EXE
+
+    mem_expt := mem_reg_expt || io.dmem.wr_addr_invalid_expt || io.dmem.wr_access_err_expt ||
+         io.dmem.rd_addr_invalid_expt || io.dmem.rd_access_err_expt
+    // this is a wire, so that exception can be handled before next posclk
+
+    mem_cause := Mux(mem_reg_expt, mem_reg_cause, 
+        Mux(io.dmem.wr_addr_invalid_expt, Cause.SAM(3, 0), 
+        Mux(io.dmem.rd_addr_invalid_expt, Cause.LAM(3, 0),
+        Mux(io.dmem.wr_access_err_expt, Cause.SAF(3, 0), 
+        Mux(io.dmem.rd_access_err_expt, Cause.LAF(3, 0), 0.U(4.W))))))
 
     // ---------- CSR & Interrupt Client -----------
     val csr = Module(new CSRFile)
@@ -230,10 +257,10 @@ class Datapath() extends Module {
 
     csr.io.csr_cmd := Mux(wb_reg_valid, wb_ctrl_sigs.csr_cmd, CSR.N)
 
-    csr.io.instIv := false.B
-    csr.io.laddrIv := false.B
-    csr.io.saddrIv := false.B
-    csr.io.pcIv := false.B // TODO: after implementing i/d memory exception, this should be assigned
+    csr.io.pcIv := mem_expt && (mem_cause === Cause.IAM(3, 0))
+    csr.io.instIv := mem_expt && (mem_cause === Cause.II(3, 0))
+    csr.io.laddrIv := mem_expt && (mem_cause === Cause.LAM(3, 0))
+    csr.io.saddrIv := mem_expt && (mem_cause === Cause.SAM(3, 0))
     
     // Trap Instruction
     val wb_is_eret = wb_reg_inst === MRET || wb_reg_inst === URET || wb_reg_inst === SRET
