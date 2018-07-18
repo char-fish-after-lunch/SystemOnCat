@@ -51,14 +51,20 @@ class TLB extends Module{
 		}
 	}
 
+	//
+
 	// TLB LookUp
-	val lookup_tag = Cat(io.asid, io.vaddr(31,16))
+	val lookup_tag = Cat(io.asid, io.vaddr(31,17))
 	val page_offset = io.vaddr(11,0)
 	val lookup_index = io.vaddr(16,12)
 	val TLBHit = entries_valid(lookup_index) & (entries(lookup_index).tag === lookup_tag) & ~io.passthrough
-	when(TLBHit){
+	
+	when(TLBHit | io.passthrough){
 		printf("tlb hit\n")
-		io.paddr := Cat(entries(lookup_index).ppn, page_offset)
+		io.paddr := MuxLookup(io.passthrough, 0.U(21.W), Seq(
+			false.B -> Cat(entries(lookup_index).ppn, page_offset),
+			true.B -> io.vaddr(20,0)
+		))
 		io.valid := true.B
 	} .otherwise{
 		printf("tlb miss\n")
@@ -81,7 +87,7 @@ class TLB extends Module{
 	}
 
 	// TLB Refill request
-	val need_refill = ~TLBHit & io.tlb_request
+	val need_refill = ~TLBHit & io.tlb_request & ~io.passthrough
 	io.ptw.vaddr := io.vaddr
 	io.ptw.cmd := io.cmd
 	io.ptw.refill_request := (state === s_ready) & need_refill
