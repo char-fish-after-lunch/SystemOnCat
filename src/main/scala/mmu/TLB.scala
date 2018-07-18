@@ -15,6 +15,7 @@ class TLBIO extends Bundle{
 	val passthrough = Input(Bool())
 	val cmd = Input(UInt(2.W)) //Memory Command
 	val tlb_request = Input(Bool())
+	val tlb_flush = Input(Bool())
 
 	val paddr = Output(UInt(MemoryConsts.PaLength.W))
 	val valid = Output(Bool())
@@ -41,12 +42,14 @@ class TLB extends Module{
 
 	//Refill Store
 	val refill_tag = Reg(UInt(MemoryConsts.TLBTagLength.W))
-	val refill_offset = Reg(UInt(MemoryConsts.OffsetLength.W))
 	val refill_index = Reg(UInt(MemoryConsts.TLBIndexLength.W))
 
-	//TLB init
-	io.paddr := 0.U(21.W)
-	io.valid := false.B
+	//TLB flush
+	when(io.tlb_flush){
+		for(j <- 0 until totalEntries){
+			entries_valid(j) := false.B
+		}
+	}
 
 	// TLB LookUp
 	val lookup_tag = Cat(io.asid, io.vaddr(31,16))
@@ -54,17 +57,20 @@ class TLB extends Module{
 	val lookup_index = io.vaddr(16,12)
 	val TLBHit = entries_valid(lookup_index) & (entries(lookup_index).tag === lookup_tag) & ~io.passthrough
 	when(TLBHit){
+		printf("tlb hit\n")
 		io.paddr := Cat(entries(lookup_index).ppn, page_offset)
 		io.valid := true.B
 	} .otherwise{
+		printf("tlb miss\n")
 		io.valid := false.B
+		io.paddr := 0.U
 	}
 	
 	// TLB Refill
-	val do_refill = io.ptw.valid & ~(state === s_request)
-	when(do_refill){
+	val do_refill = io.ptw.ptw_valid & ~(state === s_request)
+	when(do_refill & ~io.tlb_flush){
 		val waddr = refill_index
-		val refill_ppn = io.ptw.pte.ppn
+		val refill_ppn = io.ptw.pte_ppn
 		val newEntry = Wire(new TLBEntry)
 		newEntry.ppn := refill_ppn
 		newEntry.tag := refill_tag
@@ -73,15 +79,27 @@ class TLB extends Module{
 		entries(refill_index) := newEntry
 	}
 
+	// TLB Refill request
+	val need_refill = ~TLBHit & io.tlb_request
+	io.ptw.vaddr := io.vaddr
+	io.ptw.cmd := io.cmd
+	io.ptw.refill_request := (state === s_ready) & need_refill
+
 	//TLB State Machine
-	when((state === s_ready) & ~TLBHit & io.tlb_request){
-		state := s_request
-		refill_index := lookup_index
-		refill_tag := lookup_tag
-		io.ptw.refill_request := true.B
+	when(state === s_ready){
+		printf("tlb ready state!\n")
+		
+		when(need_refill){
+			printf("need refill\n")
+			refill_index := lookup_index
+			refill_tag := lookup_tag
+			state := s_request
+		} 
+		
 	}
 	when (state === s_request){
-		when(io.ptw.finish){
+		printf("tlb request state!\n")
+		when(io.ptw.ptw_finish){
 			state := s_ready
 		}
 		//when(io.ptw.pf){
