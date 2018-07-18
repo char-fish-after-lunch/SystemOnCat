@@ -18,25 +18,29 @@ object TestConsts{
 class DummyMemory extends Module{
 	
 	val io = IO(Flipped(new PTWMEMIO))
-	val get = Reg(Bool())
+
 	val addr = Reg(UInt(21.W))
 	val get_data = Reg(UInt(32.W))
 
+	//val get_first :: get_second :: get_ready :: Nil = Enum(UInt(),4)
+	//val get = Reg(init = get_ready)
 
 	when(io.request){
-		get := true.B
 		addr := io.addr
-	} .otherwise{
-		get := false.B
 	}
+
+	printf("In memory -> Addr: %x\n", addr)
+
 	when(addr === TestConsts.pte_1_addr.asUInt()){
+		//get := get_first
 		get_data := TestConsts.pte_1
 	}
 	when(addr === TestConsts.pte_2_addr.asUInt()){
+		//get := get_second
 		get_data := TestConsts.pte_2
 	}
 	
-	io.valid := get
+	io.valid := ((io.addr === TestConsts.pte_1_addr.asUInt()) & (get_data === TestConsts.pte_1)) | ((io.addr === TestConsts.pte_2_addr.asUInt()) & (get_data === TestConsts.pte_2))
 	io.data := get_data
 }
 class DummyIO extends Bundle{
@@ -176,77 +180,42 @@ class DummyTLB extends Module{
 }
 
 class MMUTester() extends BasicTester{
-	/*
+	val mem = Module(new DummyMemory)	
 	val tlb = Module(new TLB)
 	val ptw = Module(new PTW)
-	val mem = Module(new DummyMemory)
-	val (cntr, done) = Counter(true.B, 10)
+	val (cntr, done) = Counter(true.B, 20)
+	
 	tlb.io.ptw <> ptw.io.tlb
 	ptw.io.mem <> mem.io
-	ptw.io.baseppn := TestConsts.ptbase_ppn
-
-
-	printf("start tlb access\n")
-	tlb.io.vaddr := TestConsts.vaddr
-	tlb.io.asid := 0.U(MemoryConsts.ASIDLength.W)
-	tlb.io.passthrough := false.B
-	tlb.io.cmd := MemoryConsts.Load
-	tlb.io.tlb_request := true.B
-	tlb.io.tlb_flush := false.B
-
-	when(tlb.io.valid){
-		printf("tlb access finish at %d, the paddr is %x\n",cntr, tlb.io.paddr)
-	}
-	*/
-	val mem = Module(new DummyMemory)
-	
-	//val dummy_tlb = Module(new DummyTLB)
-	//dummy_tlb.io.vaddr := TestConsts.vaddr
-	//dummy_tlb.io.asid := 0.U(MemoryConsts.ASIDLength.W)
-	//dummy_tlb.io.passthrough := false.B
-	//dummy_tlb.io.cmd := MemoryConsts.Load
-	//dummy_tlb.io.tlb_request := true.B
-	//dummy_tlb.io.tlb_flush := false.B
-	
-	val tlb = Module(new TLB)
-	//val dummy_tlb = Module(new DummyTLB)
-	//val dummy_ptw = Module(new DummyPTW)
-	val ptw = Module(new PTW)
-	tlb.io.ptw <> ptw.io.tlb
-	//dummy_tlb.io.ptw <> dummy_ptw.io.tlb
-	//ptw.io.mem <> mem.io
-	ptw.io.mem <> mem.io
-
-	//ptw.io.baseppn := TestConsts.ptbase_ppn
+	printf("At time: %d \n",cntr)
 	ptw.io.baseppn := TestConsts.ptbase_ppn
 	ptw.io.priv := 0.U
-	/*
-	dummy_tlb.io.vaddr := TestConsts.vaddr
-	dummy_tlb.io.asid := 0.U(MemoryConsts.ASIDLength.W)
-	dummy_tlb.io.passthrough := false.B
-	dummy_tlb.io.cmd := MemoryConsts.Load
-	dummy_tlb.io.tlb_request := true.B
-	dummy_tlb.io.tlb_flush := false.B
-	*/
-
-	printf("start tlb access\n")
 	tlb.io.vaddr := TestConsts.vaddr
 	tlb.io.asid := 0.U(MemoryConsts.ASIDLength.W)
 	tlb.io.passthrough := false.B
 	tlb.io.cmd := MemoryConsts.Load
-	tlb.io.tlb_request := true.B
+	tlb.io.tlb_request := false.B
 	tlb.io.tlb_flush := false.B
-	
-	//dummy_tlb.io.ptw <> dummy_ptw.io.tlb
-	//tlb.io.ptw <> dummy_ptw.io.tlb
-	//dummy_ptw.io.mem <> mem.io
-	//dummy_tlb.io.vaddr := TestConsts.paddr
-	val (cntr, done) = Counter(true.B, 10)
-	when(done) { stop(); stop() }
+
+	when(cntr === 1.U){printf("start tlb access\n")}
+	when(cntr === 2.U){
+		printf("Input Virtual Address: %x\n",TestConsts.vaddr)
+		tlb.io.tlb_request := true.B
+	}
+	when(done) { 
+		when(tlb.io.valid){
+			printf("Final Physical Address: %x\n", tlb.io.paddr)
+			assert(tlb.io.paddr === TestConsts.paddr)
+		}
+		stop(); stop() 
+	}
+
+
 }
 
 class MMUTests extends org.scalatest.FlatSpec {
     "MMUTests" should "pass" in {
         assert(TesterDriver execute (() => new MMUTester()))
+        //assert(1 === 2)
     }
 }

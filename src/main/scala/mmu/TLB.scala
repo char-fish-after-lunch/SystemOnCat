@@ -67,8 +67,9 @@ class TLB extends Module{
 	}
 	
 	// TLB Refill
-	val do_refill = io.ptw.ptw_valid & ~(state === s_request)
+	val do_refill = io.ptw.ptw_valid & (state === s_request)
 	when(do_refill & ~io.tlb_flush){
+		printf("TLB Start to Refill\n")
 		val waddr = refill_index
 		val refill_ppn = io.ptw.pte_ppn
 		val newEntry = Wire(new TLBEntry)
@@ -95,7 +96,7 @@ class TLB extends Module{
 			refill_tag := lookup_tag
 			state := s_request
 		} 
-		
+
 	}
 	when (state === s_request){
 		printf("tlb request state!\n")

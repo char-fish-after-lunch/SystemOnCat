@@ -67,16 +67,16 @@ class PTW extends Module{
 	val mm_cmd = Reg(UInt(2.W))
 
 	//Level 1 PTE Check
-	val pte_1_valid = (state === s_wait1) & (~temp_pte.X & ~temp_pte.W & ~temp_pte.R & temp_pte.V)
+	val pte_1_valid = (state =/= s_wait1) | ((state === s_wait1) & (~temp_pte.X & ~temp_pte.W & ~temp_pte.R & temp_pte.V))
 	//Level 2 PTE Check
-	val pte_2_valid = (state === s_wait2) & (temp_pte.V)
+	val pte_2_valid = (state =/= s_wait2) | ((state === s_wait2) & (temp_pte.V))
 	//Page Fault Signal
 	val page_fault = ~pte_1_valid | ~pte_2_valid 
 
 	//mem access
 	io.mem.request := (state === s_request) | (state === s_wait1)
 	io.mem.addr := MuxLookup(state, 0.U(21.W), Seq(
-		s_request -> (Cat(temp_pte.ppn, vpn_1) << 2),
+		s_request -> (Cat(io.baseppn, vpn_1) << 2),
 		s_wait1 -> (Cat(temp_pte.ppn, vpn_2) << 2)
 	))
 
@@ -89,7 +89,7 @@ class PTW extends Module{
 	io.tlb.pf := page_fault
 	
 	when(page_fault){
-		printf("ptw: Page Fault!")
+		printf("ptw: Page Fault!\n")
 	}
 
 	//finish logic
