@@ -26,15 +26,15 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     // val dirtys = (Mem(1 << indexWidth, Vec(wayCount, Bool())))
     // val blocks = (Mem(1 << indexWidth, Vec(wayCount, UInt((3 << blockWidth).W))))
 
-    val tags_ = new Mem(UInt((32 - indexWidth - blockWidth).W), wayCount * (1 << indexWidth))
-    val valids_ = new Mem(Bool(), wayCount * (1 << indexWidth))
-    val dirtys_ = new Mem(Bool(), wayCount * (1 << indexWidth))
-    val blocks_ = new Mem(UInt((3 << blockWidth).W), wayCount * (1 << indexWidth))
+    val r_tags = Mem(wayCount * (1 << indexWidth), UInt((32 - indexWidth - blockWidth).W))
+    val r_valids = Mem(wayCount * (1 << indexWidth), Bool())
+    val r_dirtys = Mem(wayCount * (1 << indexWidth), Bool())
+    val r_blocks = Mem(wayCount * (1 << indexWidth), UInt(((8 << blockWidth)).W))
 
-    def valids(index : UInt, way_index : UInt) = valids_(index * wayCount.U + way_index)
-    def dirtys(index : UInt, way_index : UInt) = dirtys_(index * wayCount.U + way_index)
-    def tags(index : UInt, way_index : UInt) = tags_(index * wayCount.U + way_index)
-    def blocks(index : UInt, way_index : UInt) = blocks_(index * wayCount.U + way_index)
+    // def valids(index : UInt, way_index : UInt) = r_valids(index * wayCount.U + way_index)
+    // def dirtys(index : UInt, way_index : UInt) = r_dirtys(index * wayCount.U + way_index)
+    // def tags(index : UInt, way_index : UInt) = r_tags(index * wayCount.U + way_index)
+    // def blocks(index : UInt, way_index : UInt) = r_blocks(index * wayCount.U + way_index)
 
     val state = RegInit(UInt(4.W), STATE_IDLE)
 
@@ -47,19 +47,20 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     cur_way_index := 0.U
 
     for(i <- 0 until wayCount){
-        when(tags(cur_index, i.U) === cur_tag){
+        when(r_tags(cur_index * wayCount.U + i.U) === cur_tag){
             cur_way_index := i.U
         }
     }
-    val cur_entry_valid = tags(cur_index, cur_way_index) === cur_tag && 
-        valids(cur_index, cur_way_index)
+    val cur_entry_valid = r_tags(cur_index * wayCount.U + cur_way_index) === cur_tag && 
+        r_valids(cur_index * wayCount.U + cur_way_index)
     val cur_dat = RegInit(UInt(32.W), 0.U)
     val cur_sel = RegInit(UInt(4.W), 0.U)
 
     val ack = (state === STATE_READ || state === STATE_WRITE) && cur_entry_valid
-    val stall = Wire(Bool())
+    val stall = state != STATE_IDLE && !ack
 
     val ans = Wire(UInt(32.W))
+    ans := 0.U
     val next_victim = RegInit(UInt(log2Up(wayCount).W), 0.U)
 
     val ld_count = RegInit(0.U)
@@ -75,7 +76,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     adr_o := 0.U
     cyc_o := false.B
     we_o := false.B
-    dat_o := (blocks(cur_index, cur_way_index) >> (cur_offset << 3.U))(31, 0)
+    dat_o := (r_blocks(cur_index * wayCount.U + cur_way_index) >> (cur_offset << 3.U))(31, 0)
 
     val ack_i = RegInit(Bool(), false.B)
     val dat_i = RegInit(UInt(32.W), 0.U)
@@ -92,7 +93,8 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     io.bus.slave.ack_o := ack
     io.bus.slave.err_o := false.B
     io.bus.slave.rty_o := false.B
-    io.bus.slave.stall_o := state != STATE_IDLE && !ack
+    io.bus.slave.stall_o := stall
+    io.bus.slave.dat_o := ans
 
     printf("ld_count = %d, wb_count = %d\n", ld_count, wb_count)
 
@@ -107,7 +109,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
         when(state === STATE_READ || state === STATE_WRITE){
             when(ack){
                 when(state === STATE_WRITE){
-                    val new_data = Vec(blocks(cur_index, cur_way_index).toBools)
+                    val new_data = Vec(r_blocks(cur_index * wayCount.U + cur_way_index).toBools)
                     for(i <- 0 until 4){
                         when(cur_sel(i)){
                             for(j <- 0 until 8){
@@ -115,8 +117,8 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
                             }
                         }
                     }
-                    blocks(cur_index, cur_way_index) := new_data.asUInt()
-                    dirtys(cur_index, cur_way_index) := true.B
+                    r_blocks(cur_index * wayCount.U + cur_way_index) := new_data.asUInt()
+                    r_dirtys(cur_index * wayCount.U + cur_way_index) := true.B
                 }
                 state := STATE_IDLE
             }.elsewhen(ld_count === 0.U){
@@ -125,23 +127,23 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
                 vacant_way_index := 0.U
 
                 for(i <- 0 until wayCount){
-                    when(!valids(cur_index, i.U)){
+                    when(!r_valids(cur_index * wayCount.U + i.U)){
                         vacant_way_index := i.U
                     }
                 }
-                when(!valids(cur_index, vacant_way_index)){
+                when(!r_valids(cur_index * wayCount.U + vacant_way_index)){
                     // happily, a vacant slot found
-                    tags(cur_index, vacant_way_index) := cur_tag
-                    valids(cur_index, vacant_way_index) := false.B
+                    r_tags(cur_index * wayCount.U + vacant_way_index) := cur_tag
+                    r_valids(cur_index * wayCount.U + vacant_way_index) := false.B
                     ld_count := ld_count + 1.U
 
                     we_o := false.B
                     adr_o := Cat(Seq(cur_tag, cur_index, 0.U(blockWidth)))
                     cyc_o := true.B                    
-                }.elsewhen(!dirtys(cur_index, next_victim) || (wb_count === (blockSize - 1).U && ack_i)){
+                }.elsewhen(!r_dirtys(cur_index * wayCount.U + next_victim) || (wb_count === (blockSize - 1).U && ack_i)){
                     // we can safely remove this block
-                    tags(cur_index, next_victim) := cur_tag
-                    valids(cur_index, next_victim) := false.B
+                    r_tags(cur_index * wayCount.U + next_victim) := cur_tag
+                    r_valids(cur_index * wayCount.U + next_victim) := false.B
                     next_victim := next_victim + 1.U
                     ld_count := ld_count + 1.U
                     
@@ -157,29 +159,29 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
                         offset := wb_count << 2.U
                         wb_count := wb_count + 1.U
                     }
-                    dat_o := (blocks(cur_index, next_victim) >> (offset << 3.U))(31, 0)
-                    adr_o := Cat(Seq(tags(cur_index, next_victim), cur_index, offset))
+                    dat_o := (r_blocks(cur_index * wayCount.U + next_victim) >> (offset << 3.U))(31, 0)
+                    adr_o := Cat(Seq(r_tags(cur_index * wayCount.U + next_victim), cur_index, offset))
                     we_o := true.B
                     cyc_o := true.B
                 }
             }.elsewhen(ld_count === (blockSize - 1).U && ack_i){
-                val new_data = Vec(blocks(cur_index, cur_way_index).toBools)
+                val new_data = Vec(r_blocks(cur_index * wayCount.U + cur_way_index).toBools)
                 for(i <- 0 until 32){
                     new_data(((ld_count - 1.U) << 5.U) + i.U) := dat_i(i)
                 }
-                blocks(cur_index, cur_way_index) := new_data.asUInt
-                valids(cur_index, cur_way_index) := true.B
-                dirtys(cur_index, cur_way_index) := state === STATE_WRITE
+                r_blocks(cur_index * wayCount.U + cur_way_index) := new_data.asUInt
+                r_valids(cur_index * wayCount.U + cur_way_index) := true.B
+                r_dirtys(cur_index * wayCount.U + cur_way_index) := state === STATE_WRITE
             }.otherwise{
                 val offset = Wire(UInt(blockWidth.W))
                 when(!io.bus.master.ack_i){
                     offset := (ld_count - 1.U) << 2.U
                 }.otherwise{
-                    val new_data = Vec(blocks(cur_index, cur_way_index).toBools)
+                    val new_data = Vec(r_blocks(cur_index * wayCount.U + cur_way_index).toBools)
                     for(i <- 0 until 32){
                         new_data(((ld_count - 1.U) << 5.U) + i.U) := dat_i(i)
                     }
-                    blocks(cur_index, cur_way_index) := new_data.asUInt
+                    r_blocks(cur_index * wayCount.U + cur_way_index) := new_data.asUInt
                     offset := wb_count << 2.U
                     ld_count := ld_count + 1.U
                 }

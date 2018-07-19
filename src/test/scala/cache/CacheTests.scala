@@ -34,6 +34,14 @@ class CacheTester(c: => Cache) extends BasicTester {
     cache.io.bus.slave.we_i := test_we_i(cntr)
     cache.io.bus.slave.cyc_i := test_cyc_i(cntr)
     cache.io.bus.slave.stb_i := test_stb_i(cntr)
+    cache.io.bus.master.stall_i := false.B
+    cache.io.bus.master.rty_i := false.B
+    cache.io.bus.master.err_i := false.B
+    cache.io.bus.master.ack_i := true.B
+    cache.io.bus.slave.dat_i := 0.U(32.W)
+    cache.io.bus.slave.sel_i := 15.U(4.W)
+    cache.io.bus.master.dat_i := 0.U(32.W)
+
 
     when(done) {
         stop()
