@@ -1,11 +1,5 @@
 #include "inst.h"
-
-#define ADR_SERIAL_BUF 0xf004
-#define ADR_SERIAL_DAT 0xf000
-#define PUTCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf)); \
-    (*((char*)ADR_SERIAL_DAT) = (c));}
-#define GETCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf0)); \
-    (c) = *((char*)ADR_SERIAL_DAT); }
+#include "arch.h"
 
 #define STR_PROMPT ">>> "
 #define bool int
@@ -18,8 +12,9 @@
 #define GETBITS(src, ld, rd) (((src) >> (ld)) & ((1 << ((rd) - (ld) + 1)) - 1))
 #define SETBITS(dest, ld, rd, src) ((dest) | (GETBITS((src), 0, (rd) - (ld)) << (ld)))
 
+extern void _trap_entry(void);
 extern void _entry(unsigned adr);
-
+extern void _exit(void);
 
 void print(const char* str){
     int i;
@@ -35,6 +30,11 @@ bool strcmp(char* a, char* b){
 
 char buffer[BUFSIZE];
 unsigned regs[REGSIZE];
+
+#if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+extern bool in_user;
+extern unsigned time_count, time_lim; // secs
+#endif
 
 void get_line(){
     int bn = -1;
@@ -81,9 +81,72 @@ void print_help(){
     print("I <x>      - Edit instructions starting at address x.\n");
     print("V <x> <y>  - View contents in [x, y].\n");
     print("D <x> <y>  - Disassemble contents in [x, y].\n");
+#if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+    print("T <x>      - Set time limit to x * 10 ms.\n");
+#endif
 }
 
+#if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+void trap(){
+    unsigned cause = read_csr(mcause);
+    if((int)cause < 0){
+        // asynchronous interrupt
+        switch((cause << 1) >> 1){
+            case INT_MTIMER:
+                *((unsigned*)ADR_TMEH) = 0;
+                *((unsigned*)ADR_TMEL) = 0;
+                if(in_user){
+                    ++ time_count;
+                    if(time_count == time_lim){
+                        // time is up
+                        write_csr(mepc, _exit);
+                        break;
+                    }
+                }
+                break;
+            default:
+                print("An unrecognized interrupt received!\n");
+                print("Cause: ");
+                hex2str(cause);
+                print(buffer);
+                print("\n");
+                
+                print("EPC: ");
+                hex2str(read_csr(mepc));
+                print(buffer);
+                print("\n");
+        }
+        clear_csr(mip, 1 << ((cause << 1) >> 1));
+    } else{
+        print("An unrecognized exception received!\n");
+        print("Cause: ");
+        hex2str(cause);
+        print(buffer);
+        print("\n");
+        
+        print("EPC: ");
+        hex2str(read_csr(mepc));
+        print(buffer);
+        print("\n");
+    }
+}
+#endif
+
 void init(){
+#if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+    // set up trap vector
+    write_csr(mtvec, _trap_entry);
+    set_csr(mstatus, 8);
+    // timecmp = 125000 = clockfreq / 100
+    // timer precision: 10ms
+    *((unsigned*)ADR_CMPH) = 0;
+    *((unsigned*)ADR_CMPL) = 125000;
+    *((unsigned*)ADR_TMEH) = 0;
+    *((unsigned*)ADR_TMEL) = 0;
+    set_csr(mie, 128);
+    in_user = false;
+#endif
+
     int i;
     for(i = 0; i < REGSIZE; i ++)
         regs[i] = 0;
@@ -102,8 +165,24 @@ void jump_exe(){
     if(!*c || !*(c+1))
         return;
     unsigned target_adr = str2hex(c);
-    hex2str(target_adr);
     _entry(target_adr);
+
+
+#if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+    if(time_lim <= time_count){
+        print("Programme killed prematurely for running out of time.\n");
+    }
+    
+    print("Time used: 10 * ");
+    hex2str(time_count);
+    print(buffer);
+    print(" ms\n");
+
+    print("Time limit: 10 * ");
+    hex2str(time_lim);
+    print(buffer);
+    print(" ms\n");
+#endif
 }
 
 void reg_exe(){
@@ -333,6 +412,15 @@ void print_int2inst(unsigned val){
     }
 }
 
+#if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+void timelim_exe(){
+    char* c = next_word(buffer);
+    if(!*c || !*(c+1))
+        return;
+    time_lim = str2hex(c);
+}
+#endif
+
 void disas_exe(){
     char* c = next_word(buffer);
     if(!*c || !*(c+1))
@@ -384,6 +472,11 @@ void start(){
             case 'D':
                 disas_exe();
                 break;
+#if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+            case 'T':
+                timelim_exe();
+                break;
+#endif
             default:
                 // print help
                 print_help();
