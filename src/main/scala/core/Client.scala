@@ -26,16 +26,16 @@ class Client() extends SysBusSlave(new ClientIrqIO()){
 	val irq = Wire(new ClientIrqIO())
 	io.in <> irq // as scala cannot infer that io.in.tmr_irq_r exists, wire type has to be specified again
 
-	val msip = Reg(UInt(32.W))
+	val msip = RegInit(0.U(32.W))
 
 	//Time Interrupt Register
 	// val cmpl = Reg(UInt(32.W))
 	val cmpl = RegInit(0xfffffff.U(32.W))
-	val cmph = Reg(UInt(32.W))
-	val tmel = Reg(UInt(32.W))
-	val tmeh = Reg(UInt(32.W))
+	val cmph = RegInit(0.U(32.W))
+	val tmel = RegInit(0.U(32.W))
+	val tmeh = RegInit(0.U(32.W))
 	val state = RegInit(Bool(), false.B)
-	val ans = Reg(UInt(32.W))
+	val ans = RegInit(0.U(32.W))
 
 	val req = io.out.cyc_i && io.out.stb_i
 	val we = req && io.out.we_i

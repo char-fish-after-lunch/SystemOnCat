@@ -10,6 +10,10 @@ class DMemCoreIO extends Bundle {
     val wr_en = Input(Bool())
     val rd_en = Input(Bool())
     val mem_type = Input(Bits(MEM_X.getWidth.W))
+    val wr_addr_invalid_expt = Output(Bool())
+    val rd_addr_invalid_expt = Output(Bool())
+    val wr_access_err_expt = Output(Bool())
+    val rd_access_err_expt = Output(Bool())
 }
 
 class DMemIO extends Bundle {
@@ -20,12 +24,12 @@ class DMemIO extends Bundle {
 class DMem extends Module {
     // TODO: implement me!
     val io = IO(new DMemIO)
-    io.bus.req.addr := io.core.addr
-    io.bus.req.data_wr := io.core.wr_data
 
-    val mem_type_reg = Reg(Bits())
-    val rd_reg = Reg(Bool())
-    val mask_reg = Reg(Bits())
+    val mem_type_reg = RegInit(MEM_X)
+    val wr_reg = RegInit(false.B)
+    val rd_reg = RegInit(false.B)
+    val addr_err_reg = RegInit(false.B)
+    val mask_reg = RegInit("b0000".U(4.W))
 
     val byte_masks = Seq(
         0.U(4.W) -> "b0001".U(4.W),
@@ -33,24 +37,54 @@ class DMem extends Module {
         2.U(4.W) -> "b0100".U(4.W),
         3.U(4.W) -> "b1000".U(4.W),
     )
-    val hword_maskts = Seq(
+    val hword_masks = Seq(
         0.U(4.W) -> "b0011".U(4.W),
         2.U(4.W) -> "b1100".U(4.W),
+    )
+
+    val byte_wr_datas = Seq(
+        0.U(4.W) -> Cat(0.U(24.W), io.core.wr_data(7, 0)),
+        1.U(4.W) -> Cat(0.U(16.W), io.core.wr_data(7, 0), 0.U(8.W)),
+        2.U(4.W) -> Cat(0.U(8.W), io.core.wr_data(7, 0), 0.U(16.W)),
+        3.U(4.W) -> Cat(io.core.wr_data(7, 0), 0.U(24.W))
+    )
+    val hword_wr_datas = Seq(
+        0.U(4.W) -> Cat(0.U(16.W), io.core.wr_data(15, 0)),
+        2.U(4.W) -> Cat(io.core.wr_data(15, 0), 0.U(16.W))
     )
 
     val mask = MuxLookup(io.core.mem_type, 0.U(4.W), Seq(
         MEM_B -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), byte_masks),
         MEM_BU -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), byte_masks),
-        MEM_H -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), hword_maskts),
-        MEM_HU -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), hword_maskts),
+        MEM_H -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), hword_masks),
+        MEM_HU -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), hword_masks),
         MEM_W -> 15.U(4.W) // 1111
     ))
 
+    val wr_data = MuxLookup(io.core.mem_type, 0.U(4.W), Seq(
+        MEM_B -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), byte_wr_datas),
+        MEM_BU -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), byte_wr_datas),
+        MEM_H -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), hword_wr_datas),
+        MEM_HU -> MuxLookup(io.core.addr(1, 0), 0.U(4.W), hword_wr_datas),
+        MEM_W -> io.core.wr_data // 1111
+    ))
+
+    val addr_err = MuxLookup(io.core.mem_type, false.B, Seq(
+        MEM_H -> (io.core.addr(0) =/= 0.U(1.W)), // half word r/w: must be 2-aligned
+        MEM_HU -> (io.core.addr(0) =/= 0.U(1.W)),
+        MEM_W -> (io.core.addr(1, 0) =/= 0.U(2.W)) // full word r/w: must be 4-aligned
+    ))
+
     io.bus.req.sel := mask
-    io.bus.req.wen := io.core.wr_en
-    io.bus.req.ren := io.core.rd_en
+    io.bus.req.wen := io.core.wr_en && (!addr_err)
+    io.bus.req.ren := io.core.rd_en && (!addr_err)
+    io.bus.req.addr := io.core.addr
+    io.bus.req.data_wr := wr_data
+
     mem_type_reg := io.core.mem_type
+    wr_reg := io.core.wr_en
     rd_reg := io.core.rd_en
+    addr_err_reg := addr_err
     mask_reg := mask
 
     val bus_data = io.bus.res.data_rd
@@ -72,4 +106,9 @@ class DMem extends Module {
         MEM_HU -> Cat(Fill(16, 0.U(1.W)), hword_data(15, 0))
     ))
     io.core.rd_data := Mux(rd_reg, ext_data, 0.U(32.W))
+
+    io.core.wr_addr_invalid_expt := wr_reg && addr_err_reg
+    io.core.wr_access_err_expt := wr_reg && (!addr_err_reg) && io.bus.res.err
+    io.core.rd_addr_invalid_expt := rd_reg && addr_err_reg
+    io.core.rd_access_err_expt := rd_reg && (!addr_err_reg) && io.bus.res.err
 }

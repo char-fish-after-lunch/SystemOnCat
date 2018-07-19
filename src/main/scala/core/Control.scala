@@ -31,7 +31,7 @@ class ControlSignals() extends Bundle() {
     val wb_sel    = Bits(WB_X.getWidth.W)  // write back target
 
     val csr_cmd   = Bits(CSR.X.getWidth.W) // CSR op command type (W, S, C)
-    val illegal   = Bool()                 // is legal 
+    val legal   = Bool()                 // is legal 
 
     val fence_i = Bool()                   // is fence
     val fence = Bool()                     // is fence.i
@@ -127,7 +127,7 @@ class Control() extends Module {
     io.sig.wb_en       := ctrlSignals(11)
     io.sig.wb_sel      := ctrlSignals(12)
     io.sig.csr_cmd     := ctrlSignals(13)
-    io.sig.illegal     := ctrlSignals(14)
+    io.sig.legal     := ctrlSignals(14)
     io.sig.fence       := ctrlSignals(15)
     io.sig.fence_i     := ctrlSignals(16)
     io.sig.mul         := ctrlSignals(17)

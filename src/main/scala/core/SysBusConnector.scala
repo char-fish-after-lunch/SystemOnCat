@@ -16,6 +16,7 @@ class SysBusRequest extends Bundle {
 class SysBusResponse extends Bundle {
     val data_rd = Output(UInt(32.W))
     val locked = Output(Bool())
+    val err = Output(Bool())
 }
 
 class SysBusBundle extends Bundle {
@@ -46,7 +47,7 @@ class SysBusConnector(irq_client: Client) extends Module {
 
     val bus_map = Seq(
         // default -> 0
-        BitPat("b0000000000000000111100000000000?") -> 1.U(2.W),
+        BitPat("b00000000000000001111000000000???") -> 1.U(2.W),
         BitPat("b000000100000000001000000000?????") -> 2.U(2.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(
@@ -75,10 +76,12 @@ class SysBusConnector(irq_client: Client) extends Module {
     io.imem.res.data_rd := 0.U(32.W)
     io.dmem.res.locked := false.B
 
-    val dmem_reg_en = Reg(Bool())
-    val imem_reg_en = Reg(Bool())
+    val dmem_reg_en = RegInit(false.B)
+    val imem_reg_en = RegInit(false.B)
 
     io.imem.res.locked := dmem_reg_en
+    io.dmem.res.err := false.B
+    io.imem.res.err := false.B
 
     dmem_reg_en := dmem_en
     imem_reg_en := imem_en
@@ -86,11 +89,15 @@ class SysBusConnector(irq_client: Client) extends Module {
     when (dmem_reg_en) {
         io.dmem.res.data_rd := bus.io.out.dat_o
         io.imem.res.data_rd := 0.U(32.W)
+        io.dmem.res.err := bus.io.out.err_o
+        io.imem.res.err := false.B
     }
 
     when (imem_reg_en && !dmem_reg_en) {
         io.dmem.res.data_rd := 0.U(32.W)
         io.imem.res.data_rd := bus.io.out.dat_o
+        io.dmem.res.err := false.B
+        io.imem.res.err := bus.io.out.err_o
     }
 
 // class SysBusSlaveBundle extends Bundle{
