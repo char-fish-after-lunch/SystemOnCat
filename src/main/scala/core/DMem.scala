@@ -14,6 +14,7 @@ class DMemCoreIO extends Bundle {
     val rd_addr_invalid_expt = Output(Bool())
     val wr_access_err_expt = Output(Bool())
     val rd_access_err_expt = Output(Bool())
+    val locked = Output(Bool())
 }
 
 class DMemIO extends Bundle {
@@ -106,7 +107,7 @@ class DMem extends Module {
         MEM_HU -> Cat(Fill(16, 0.U(1.W)), hword_data(15, 0))
     ))
     io.core.rd_data := Mux(rd_reg, ext_data, 0.U(32.W))
-
+    io.core.locked := io.bus.res.locked
     io.core.wr_addr_invalid_expt := wr_reg && addr_err_reg
     io.core.wr_access_err_expt := wr_reg && (!addr_err_reg) && io.bus.res.err
     io.core.rd_addr_invalid_expt := rd_reg && addr_err_reg

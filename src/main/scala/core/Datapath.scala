@@ -38,6 +38,8 @@ class Datapath() extends Module {
     // but in case 2, the exception caused by inst should be passed into CSR, while in case 1 we shouldn't.
     // that's why we need 2 signals(valid & functioning) for each stage.
 
+    val dmem_locked = Wire(Bool())
+    val imem_locked = Wire(Bool())
 
     val ex_reg_inst = RegInit(Bits(), NOP) // original instruction
     val mem_reg_inst = RegInit(Bits(), NOP)
@@ -93,8 +95,11 @@ class Datapath() extends Module {
 
     val id_exe_data_hazard = Wire(Bool())
     val id_csr_data_hazard = Wire(Bool())
-    val pc_stall = id_exe_data_hazard || id_csr_data_hazard || io.imem.locked
-    val id_replay = Wire(Bool())
+    val pc_stall = id_exe_data_hazard || id_csr_data_hazard || imem_locked || dmem_locked
+
+    val id_replay = Wire(Bool()) //happens when stalled
+    val ex_replay = Wire(Bool())
+    val mem_replay = Wire(Bool())
 
     val csr_epc = Wire(UInt())
     val mem_eret = Wire(Bool())
@@ -116,6 +121,7 @@ class Datapath() extends Module {
 
     // ---------- IF -----------
     io.imem.pc := npc
+    imem_locked := io.imem.locked
 
     // ---------- ID -----------
     // regs update
@@ -125,16 +131,17 @@ class Datapath() extends Module {
     
     inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
-    id_replay := id_exe_data_hazard || id_csr_data_hazard
-    id_reg_valid := ((!id_jump_expected && !ex_branch_mistaken && !pc_stall && pc_reg_valid) || id_replay) &&
+    id_replay := id_exe_data_hazard || id_csr_data_hazard || dmem_locked || imem_locked
+    id_reg_valid := ((!id_jump_expected && !ex_branch_mistaken && !pc_stall && pc_reg_valid) || (id_replay && id_reg_valid)) &&
          (!(csr_branch && csr_flush_vector(2)))
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
     
-    id_reg_expt := pc_expt && pc_reg_valid
-    id_reg_cause := Mux(io.imem.pc_invalid_expt, Cause.IAM(3, 0), 
-        Mux(io.imem.pc_err_expt, Cause.IAF(3, 0), 0.U(4.W)))
-    id_reg_expt_val := Mux(pc_expt, pc, 0.U(32.W))
+    id_reg_expt := Mux(id_replay, id_reg_expt, pc_expt && pc_reg_valid)
+    id_reg_cause := Mux(id_replay, id_reg_cause,
+        Mux(io.imem.pc_invalid_expt, Cause.IAM(3, 0), 
+        Mux(io.imem.pc_err_expt, Cause.IAF(3, 0), 0.U(4.W))))
+    id_reg_expt_val := Mux(id_replay, id_reg_expt_val, Mux(pc_expt, pc, 0.U(32.W)))
 
     id_expt := id_reg_expt || (!io.ctrl.sig.legal)
     id_functioning := id_reg_valid && (!id_expt)
@@ -179,19 +186,24 @@ class Datapath() extends Module {
 
     // ---------- EXE ----------
     // regs update
-    when (id_functioning) {
+
+    ex_replay := dmem_locked || imem_locked
+    when (!ex_replay && id_functioning) {
         ex_ctrl_sigs := io.ctrl.sig
         ex_reg_imme := id_imme
         ex_reg_inst := inst_reg
         ex_reg_pc := id_reg_pc
     }
-    ex_reg_valid := (!ex_branch_mistaken) && id_reg_valid && (!id_exe_data_hazard) && 
-        (!(csr_branch && csr_flush_vector(1))) && (!id_csr_data_hazard)
-    ex_reg_expt := id_expt && id_reg_valid
-    ex_reg_cause := Mux(id_reg_expt && id_reg_valid, id_reg_cause,
-        Mux((!io.ctrl.sig.legal), Cause.II(3, 0), 0.U(4.W)))
+    ex_reg_valid := ((id_reg_valid && (!id_exe_data_hazard) && (!id_csr_data_hazard)) || ex_replay) &&
+        (!ex_branch_mistaken) && (!(csr_branch && csr_flush_vector(1))) // tricky
 
-    ex_reg_expt_val := Mux(id_reg_expt && id_reg_valid, id_reg_expt_val, 0.U(4.W))
+    ex_reg_expt := Mux(ex_replay, ex_reg_expt, id_expt && id_reg_valid) 
+    ex_reg_cause := Mux(ex_replay, ex_reg_cause,
+        Mux(id_reg_expt && id_reg_valid, id_reg_cause,
+        Mux((!io.ctrl.sig.legal), Cause.II(3, 0), 0.U(4.W))))
+
+    ex_reg_expt_val := Mux(ex_replay, ex_reg_expt_val, 
+        Mux(id_reg_expt && id_reg_valid, id_reg_expt_val, 0.U(4.W)))
 
     ex_functioning := ex_reg_valid && (!ex_reg_expt)
 
@@ -240,7 +252,8 @@ class Datapath() extends Module {
 
     // ---------- MEM ----------
     // regs update
-    when (ex_functioning) {
+
+    when (!mem_replay && ex_functioning) {
         mem_ctrl_sigs := ex_ctrl_sigs
         mem_reg_pc := ex_reg_pc
         mem_reg_inst := ex_reg_inst
@@ -250,8 +263,8 @@ class Datapath() extends Module {
     // alu.io.cmp_out decides whether a branch is taken
 
 
-
-    mem_reg_valid := ex_reg_valid && (!(csr_branch && csr_flush_vector(0)))
+    mem_replay := dmem_locked
+    mem_reg_valid := (ex_reg_valid || mem_replay) && (!(csr_branch && csr_flush_vector(0)))
 
     io.dmem.wr_data := ex_rs(1)
     io.dmem.addr := alu.io.out
@@ -259,9 +272,9 @@ class Datapath() extends Module {
     io.dmem.rd_en := ex_functioning && ex_ctrl_sigs.mem && isRead(ex_ctrl_sigs.mem_cmd)
     io.dmem.mem_type := ex_ctrl_sigs.mem_type
 
-    mem_reg_expt := ex_reg_expt && ex_reg_valid
-    mem_reg_cause := ex_reg_cause // no exception would happen during EXE
-    mem_reg_expt_val := ex_reg_expt_val
+    mem_reg_expt := Mux(mem_replay, mem_reg_expt, ex_reg_expt && ex_reg_valid)
+    mem_reg_cause := Mux(mem_replay, mem_reg_cause, ex_reg_cause) // no exception would happen during EXE
+    mem_reg_expt_val := Mux(mem_replay, mem_reg_expt_val, ex_reg_expt_val)
 
     mem_expt := (mem_reg_expt && mem_reg_valid) || io.dmem.wr_addr_invalid_expt || io.dmem.wr_access_err_expt ||
          io.dmem.rd_addr_invalid_expt || io.dmem.rd_access_err_expt
@@ -353,8 +366,8 @@ class Datapath() extends Module {
     csr_epc := csr.io.epc
     csr_evec := csr.io.evec
 
-    wb_reg_interp := mem_interp
-    wb_reg_eret := mem_eret
+    wb_reg_interp := mem_interp && (!mem_replay)
+    wb_reg_eret := mem_eret && (!mem_replay)
     csr_reg_epc := csr_epc
     csr_reg_evec := csr_evec
 
@@ -366,11 +379,12 @@ class Datapath() extends Module {
         wb_reg_wdata := mem_reg_wdata
     }
 
-    wb_reg_valid := mem_reg_valid
+    wb_reg_valid := mem_reg_valid && (!mem_replay)
     wb_reg_expt := mem_expt && mem_reg_valid
     wb_functioning := wb_reg_valid && (!wb_reg_expt)
 
     dmem_reg := io.dmem.rd_data
+    dmem_locked := io.dmem.locked
 
     reg_write := MuxLookup(wb_ctrl_sigs.wb_sel, wb_reg_wdata, Seq(
         WB_MEM -> dmem_reg,
