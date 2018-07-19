@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import systemoncat.devices._
 import systemoncat.sysbus._
+import systemoncat.mmu._
 
 class SysBusRequest extends Bundle {
     val addr = Input(UInt(32.W))
@@ -34,6 +35,8 @@ class SysBusConnectorIO extends Bundle {
     val imem = new SysBusBundle()
     val dmem = new SysBusBundle()
     val external = new SysBusExternal()
+    val mmu_csr_info = new CSRInfo()
+    val mmu_expt = new MMUException()
 }
 
 class SysBusConnector(irq_client: Client) extends Module {
@@ -56,48 +59,51 @@ class SysBusConnector(irq_client: Client) extends Module {
         irq_client
     )
 
-    val bus = Module(new SysBusTranslator(bus_map, bus_slaves))
-    bus.io.in(0) <> ram_slave.io.out
-    bus.io.in(1) <> serial_slave.io.out
-    bus.io.in(2) <> io.external.irq_client
+    val mmu = Module(new MMUWrapper(bus_map, bus_slaves))
+    mmu.io.external.ram <> ram_slave.io.out
+    mmu.io.external.serial <> serial_slave.io.out
+    mmu.io.external.irq_client <> io.external.irq_client
+    mmu.io.csr_info <> io.mmu_csr_info
+    mmu.io.expt <> io.mmu_expt
 
     val imem_en = io.imem.req.wen || io.imem.req.ren
     val dmem_en = io.dmem.req.wen || io.dmem.req.ren
-    bus.io.out.dat_i := Mux(io.dmem.req.wen, io.dmem.req.data_wr, 0.U(32.W))
-    bus.io.out.adr_i := Mux(dmem_en, io.dmem.req.addr, // data memory first
+    mmu.io.req.addr := Mux(dmem_en, io.dmem.req.addr, // data memory first
         Mux(imem_en, io.imem.req.addr, 0.U(32.W)))
-    bus.io.out.stb_i := dmem_en || imem_en
-    bus.io.out.sel_i := Mux(dmem_en, io.dmem.req.sel,
+    mmu.io.req.data_wr := Mux(io.dmem.req.wen, io.dmem.req.data_wr, 0.U(32.W))
+    mmu.io.req.sel := Mux(dmem_en, io.dmem.req.sel,
         Mux(imem_en, io.imem.req.sel, 0.U(32.W)))
-    bus.io.out.cyc_i := true.B
-    bus.io.out.we_i := io.dmem.req.wen
-
-    io.dmem.res.data_rd := 0.U(32.W)
-    io.imem.res.data_rd := 0.U(32.W)
-    io.dmem.res.locked := false.B
+    mmu.io.req.wen := io.dmem.req.wen
+    mmu.io.req.ren := io.dmem.req.ren || (!io.dmem.req.wen && io.imem.req.ren)
+    mmu.io.req.cmd := Mux(io.dmem.req.wen, MemoryConsts.Store,
+        Mux(io.dmem.req.ren, MemoryConsts.Load, MemoryConsts.PC))
 
     val dmem_reg_en = RegInit(false.B)
     val imem_reg_en = RegInit(false.B)
 
-    io.imem.res.locked := dmem_reg_en
-    io.dmem.res.err := false.B
-    io.imem.res.err := false.B
-
     dmem_reg_en := dmem_en
     imem_reg_en := imem_en
 
+    io.dmem.res.data_rd := 0.U(32.W)
+    io.imem.res.data_rd := 0.U(32.W)
+    io.dmem.res.locked := dmem_reg_en && mmu.io.res.locked
+
+    io.imem.res.locked := dmem_reg_en || (!dmem_reg_en && mmu.io.res.locked)
+    io.dmem.res.err := false.B
+    io.imem.res.err := false.B
+
     when (dmem_reg_en) {
-        io.dmem.res.data_rd := bus.io.out.dat_o
+        io.dmem.res.data_rd := mmu.io.res.data_rd
         io.imem.res.data_rd := 0.U(32.W)
-        io.dmem.res.err := bus.io.out.err_o
+        io.dmem.res.err := mmu.io.res.err
         io.imem.res.err := false.B
     }
 
     when (imem_reg_en && !dmem_reg_en) {
         io.dmem.res.data_rd := 0.U(32.W)
-        io.imem.res.data_rd := bus.io.out.dat_o
+        io.imem.res.data_rd := mmu.io.res.data_rd
         io.dmem.res.err := false.B
-        io.imem.res.err := bus.io.out.err_o
+        io.imem.res.err := mmu.io.res.err
     }
 
 // class SysBusSlaveBundle extends Bundle{

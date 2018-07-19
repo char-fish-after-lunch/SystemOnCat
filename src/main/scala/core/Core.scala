@@ -32,6 +32,9 @@ class Core() extends Module {
     bus_conn.io.external.serial <> io.serial
     bus_conn.io.external.irq_client <> irq_client.io.out
 
+    bus_conn.io.mmu_csr_info <> dpath.io.mmu_csr_info
+    bus_conn.io.mmu_expt <> dpath.io.mmu_expt
+
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs <> io.devs
     dpath.io.imem <> ifetch.io.core

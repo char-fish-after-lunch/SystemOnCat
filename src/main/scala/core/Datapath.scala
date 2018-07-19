@@ -2,6 +2,7 @@ package systemoncat.core
 
 import chisel3._
 import chisel3.util._
+import systemoncat.mmu._
 
 class DatapathIO() extends Bundle {
     val ctrl = Flipped(new DecoderIO)
@@ -9,6 +10,8 @@ class DatapathIO() extends Bundle {
     val imem = Flipped(new IFetchCoreIO)
     val dmem = Flipped(new DMemCoreIO)
     val irq_client = Flipped(new ClientIrqIO)
+    val mmu_csr_info = Flipped(new CSRInfo())
+    val mmu_expt = Flipped(new MMUException())
 }
 
 class Datapath() extends Module {
@@ -291,7 +294,7 @@ class Datapath() extends Module {
         Mux(id_reg_valid, "b1100".U, "b1000".U))) 
 
     csr.io.pc := last_valid_pc_from_wb
-    csr.io.addr := mem_expt_val
+    csr.io.addr := Mux(mem_expt && mem_reg_valid, mem_expt_val, io.mmu_expt.pf_vaddr)
 
     csr.io.csr_ena := wb_functioning && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
     csr.io.csr_rd_en := wb_functioning && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
@@ -316,13 +319,25 @@ class Datapath() extends Module {
     csr.io.isEbreak := wb_reg_inst === EBREAK && wb_functioning
     csr.io.isEret := wb_is_eret && wb_functioning
     
-    // page Fault. TODO: this should be assigned after implementing MMU
-    csr.io.iPF := false.B //Instruction Page Fault 
-    csr.io.lPF := false.B //Load Page Fault
-    csr.io.sPF := false.B //Store Page Fault
+    // page Fault. TODO: page fault triggering should be carefully examined
+    csr.io.iPF := io.mmu_expt.iPF //Instruction Page Fault 
+    csr.io.lPF := io.mmu_expt.lPF //Load Page Fault
+    csr.io.sPF := io.mmu_expt.sPF //Store Page Fault
 
     // write data
     csr.io.wb_csr_dat := wb_reg_wdata
+
+
+    io.mmu_csr_info.base_ppn := csr.io.baseppn
+    io.mmu_csr_info.passthrough := !csr.io.mode
+    io.mmu_csr_info.asid := !csr.io.asid
+    io.mmu_csr_info.priv := !csr.io.priv
+    io.mmu_csr_info.tlb_flush := false.B // TODO: add support for SFENCE.VMA to support tlb_flush
+    
+
+    val asid = Output(UInt(MemoryConsts.ASIDLength.W))
+    val mode = Output(Bool())
+    val priv = Output(UInt(2.W))
 
     // val epc = Output(UInt(32.W))  //EPC
 

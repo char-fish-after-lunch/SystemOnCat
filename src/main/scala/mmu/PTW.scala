@@ -45,12 +45,7 @@ class PTWIO extends Bundle{
 	val priv = Input(UInt(2.W))
 
 	//Page Fault Exception
-	val iPF = Output(Bool())
-	val lPF = Output(Bool())
-	val sPF = Output(Bool())
-
-	//Page Fault PTE
-	val pf_vaddr = Output(UInt(MemoryConsts.VaLength.W))
+	val expt = new MMUException
 }
 
 class PTW extends Module{
@@ -82,10 +77,10 @@ class PTW extends Module{
 
 
 	//Page Fault Handler
-	io.pf_vaddr := io.tlb.vaddr
-	io.lPF := (mm_cmd === MemoryConsts.Load) & page_fault
-	io.sPF := (mm_cmd === MemoryConsts.Store) & page_fault
-	io.iPF := (mm_cmd === MemoryConsts.PC) & page_fault
+	io.expt.pf_vaddr := io.tlb.vaddr
+	io.expt.lPF := (mm_cmd === MemoryConsts.Load) & page_fault
+	io.expt.sPF := (mm_cmd === MemoryConsts.Store) & page_fault
+	io.expt.iPF := (mm_cmd === MemoryConsts.PC) & page_fault
 	io.tlb.pf := page_fault
 	
 	when(page_fault){
