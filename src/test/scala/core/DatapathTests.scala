@@ -114,28 +114,36 @@ object DatapathTestSpecs extends TestUtils {
 
     val timer_irq_test_insts = Seq(
         0x00000013.S(32.W),
-        0x03800093.S(32.W),
-        0x08000113.S(32.W),
+        0x00000097.S(32.W),
+        0x02808093.S(32.W),
         0x30509073.S(32.W),
+
+        0x02004a37.S(32.W),
+        0x0000f537.S(32.W),
+        0x04000293.S(32.W),
+        0x08000113.S(32.W),
 
         0x30045073.S(32.W),
         0x30411073.S(32.W),
-        0x00000013.S(32.W),
-        0x00000013.S(32.W),
+        0x0200006f.S(32.W),
+        0x00000193.S(32.W),
 
-        0x00000013.S(32.W),
-        0x00000013.S(32.W),
-        0x00000013.S(32.W),
-        0x00000013.S(32.W),
+        0x003a2423.S(32.W),
+        0x00552023.S(32.W),
+        0x00128293.S(32.W),
+        0x00000313.S(32.W),
 
-        0x00000013.S(32.W),
-        0x00000013.S(32.W),
-        0x0000f537.S(32.W),
-        0x02100093.S(32.W),
-        0x00152023.S(32.W),
-        
-        0x00000013.S(32.W),
+        0x34431073.S(32.W),
         0x30200073.S(32.W),
+        0x02000193.S(32.W),
+        0x003a2023.S(32.W),
+
+        0x00000193.S(32.W),
+        0x003a2423.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+
+        0xff9ff06f.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
@@ -144,12 +152,38 @@ object DatapathTestSpecs extends TestUtils {
 
     val tmp_test_insts = Seq(
         0x00000013.S(32.W),
-        0x00c00113.S(32.W),
-        0x00012083.S(32.W),
-        0x00112423.S(32.W),
+        0x00000097.S(32.W),
+        0x02408093.S(32.W),
+        0x30509073.S(32.W),
+        0x02004a37.S(32.W),
+        0x0000f537.S(32.W),
+        0x04000293.S(32.W),
+        0x30045073.S(32.W),
+        0x30445073.S(32.W),
+        0x0240006f.S(32.W),
+        0x00552023.S(32.W),
+        0x34202273.S(32.W),
+        0x03020213.S(32.W),
+        0x00452023.S(32.W),
+        0x00000313.S(32.W),
+        0x34431073.S(32.W),
+        0x30200073.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
         0x00000013.S(32.W),
+        0x00001bb7.S(32.W),
+        0x001b8b93.S(32.W),
+        0x005ba023.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0xff9ff06f.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W),
+        0x00000013.S(32.W)
     )
 
     val empty_test_alu_results = Seq(
@@ -202,6 +236,8 @@ class TestIFetch(testType: => DatapathTest) extends Module with TestUtils {
     reg_pc := io.core.pc(31, 2)
     io.core.inst := VecInit(test_insts)(reg_pc).asUInt
     io.core.locked := io.locked
+    io.core.pc_invalid_expt := false.B
+    io.core.pc_err_expt := false.B
 }
 
 class TestDMemIO extends Bundle {
@@ -212,6 +248,11 @@ class TestDMemIO extends Bundle {
 class TestDMem() extends Module with TestUtils {
     val io = IO(new TestDMemIO)
     io.core.rd_data := 0x1010.U(32.W)
+    io.core.wr_addr_invalid_expt = false.B
+    io.core.rd_addr_invalid_expt = false.B
+    io.core.wr_access_err_expt = false.B
+    io.core.rd_access_err_expt = false.B
+
     when (io.core.wr_en) {
         printf("mem access write: [%x] -> %x \n", io.core.addr, io.core.wr_data)
     }
@@ -228,8 +269,8 @@ class TestDMem() extends Module with TestUtils {
 
 class TestClient(tmr_irq: Int) extends Module {
     val io = IO(new ClientIrqIO)
-    val cnt = RegInit(0.U(4.W))
-    cnt := Mux(cnt > tmr_irq.U, cnt, cnt + 1.U(4.W))
+    val cnt = RegInit(0.U(8.W))
+    cnt := Mux(cnt > tmr_irq.U, 0.U(8.W), cnt + 1.U(8.W))
 
     io.sft_irq_r := false.B
 	io.tmr_irq_r := tmr_irq.U.orR && (cnt === tmr_irq.U)
@@ -245,7 +286,7 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
 
     var tmr_irq = 0
     if (testType == TimerInterruptTest) {
-        tmr_irq = 12
+        tmr_irq = 32
     }
     val client = Module(new TestClient(tmr_irq))
     dpath.io.ctrl <> ctrl.io
@@ -260,7 +301,7 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
     val test_insts = DatapathTestSpecs.test_insts(testType)
     val test_alu_results = VecInit(DatapathTestSpecs.test_alu_results(testType))
 
-    val (cntr, done) = Counter(true.B, 60)
+    val (cntr, done) = Counter(true.B, 120)
 
     // printf(s"Clk: \n")
     // printf(s"INST[%x] => %x\n", ifetch.io.pc, ifetch.io.inst)
@@ -275,7 +316,7 @@ class DatapathTester(dp: => Datapath, testType: => DatapathTest) extends BasicTe
 
 class DatapathTests extends org.scalatest.FlatSpec {
     // BasicTest, BypassTest, BranchTest, FibonacciTest, CSRTest, TimerInterruptTest, TmpTest
-  Seq(TimerInterruptTest) foreach { test =>
+  Seq(TmpTest) foreach { test =>
     "Datapath" should s"pass $test" in {
       assert(TesterDriver execute (() => new DatapathTester(new Datapath, test)))
     }
