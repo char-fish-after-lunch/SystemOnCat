@@ -9,14 +9,20 @@ class CacheTester(c: => Cache) extends BasicTester {
 
     // adr_i, we_i, cyc_i, stb_i
     val inputSeq = Seq(
+        (0x2000.U(32.W), true.B, true.B, true.B),
+        (0x2000.U(32.W), true.B, true.B, true.B),
+        (0x3000.U(32.W), false.B, true.B, true.B),
+        (0x3000.U(32.W), false.B, true.B, true.B),
+        (0x3000.U(32.W), false.B, true.B, true.B),
         (0x2000.U(32.W), false.B, true.B, true.B),
-        (0.U(32.W), false.B, true.B, false.B),
-        (0.U(32.W), false.B, true.B, false.B),
-        (0.U(32.W), false.B, true.B, false.B),
-        (0.U(32.W), false.B, true.B, false.B),
-        (0.U(32.W), false.B, true.B, false.B),
-        (0.U(32.W), false.B, true.B, false.B),
-        (0.U(32.W), false.B, true.B, false.B)
+        (0x2000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), false.B, true.B, true.B)
     )
 
     val test_adr_i = VecInit(inputSeq.map(s => s._1))
@@ -40,8 +46,10 @@ class CacheTester(c: => Cache) extends BasicTester {
     cache.io.bus.master.ack_i := true.B
     cache.io.bus.slave.dat_i := 0.U(32.W)
     cache.io.bus.slave.sel_i := 15.U(4.W)
-    cache.io.bus.master.dat_i := 0.U(32.W)
+    cache.io.bus.master.dat_i := 103.U(32.W)
 
+    printf("dat_o = %d, ack = %d, stall = %d\n", cache.io.bus.slave.dat_o, cache.io.bus.slave.ack_o, 
+        cache.io.bus.slave.stall_o)
 
     when(done) {
         stop()
@@ -52,6 +60,6 @@ class CacheTester(c: => Cache) extends BasicTester {
 
 class CacheTests extends org.scalatest.FlatSpec {
   "CacheTests" should "pass" in {
-    assert(TesterDriver execute (() => new CacheTester(new Cache(3, 1, 8))))
+    assert(TesterDriver execute (() => new CacheTester(new Cache(2, 1, 8))))
   }
 }

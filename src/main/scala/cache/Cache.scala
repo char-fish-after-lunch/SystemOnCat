@@ -44,6 +44,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     val cur_offset = cur_adr(indexStart - 1, 0) & ~3.U
     val cur_way_index = Wire(UInt(log2Up(wayCount).W))
     
+
     cur_way_index := 0.U
 
     for(i <- 0 until wayCount){
@@ -59,9 +60,9 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     val ack = (state === STATE_READ || state === STATE_WRITE) && cur_entry_valid
     val stall = state != STATE_IDLE && !ack
 
-    val ans = Wire(UInt(32.W))
-    ans := 0.U
     val next_victim = RegInit(UInt(log2Up(wayCount).W), 0.U)
+
+    printf("VICLEN %d\n", log2Up(wayCount).U)
 
     val ld_count = RegInit(0.U)
     val wb_count = RegInit(0.U)
@@ -71,24 +72,20 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     val cyc_o = Wire(Bool())
     val dat_o = Wire(UInt(32.W))
 
+    val ans = Wire(UInt(32.W))
+    ans := (r_blocks(cur_index * wayCount.U + cur_way_index) >> (cur_offset << 3.U))(31, 0)
 
 
     adr_o := 0.U
     cyc_o := false.B
     we_o := false.B
-    dat_o := (r_blocks(cur_index * wayCount.U + cur_way_index) >> (cur_offset << 3.U))(31, 0)
+    dat_o := 0.U
 
     val ack_i = RegInit(Bool(), false.B)
     val dat_i = RegInit(UInt(32.W), 0.U)
     ack_i := io.bus.master.ack_i
     dat_i := io.bus.master.dat_i
 
-    io.bus.master.cyc_o := cyc_o
-    io.bus.master.stb_o := cyc_o
-    io.bus.master.dat_o := dat_o
-    io.bus.master.we_o := we_o
-    io.bus.master.adr_o := adr_o
-    io.bus.master.sel_o := 0xf.U
 
     io.bus.slave.ack_o := ack
     io.bus.slave.err_o := false.B
@@ -96,7 +93,8 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
     io.bus.slave.stall_o := stall
     io.bus.slave.dat_o := ans
 
-    printf("ld_count = %d, wb_count = %d\n", ld_count, wb_count)
+    printf("ld_count = %d, wb_count = %d, current_entry_valid = %d\n", ld_count, wb_count, cur_entry_valid)
+    printf("cur_adr = %d, cur_index = %d, cur_tag = %d, dirty = %d\n", cur_adr, cur_index, cur_tag, r_dirtys(cur_index * wayCount.U + cur_way_index))
 
     when(io.bus.slave.cyc_i && io.bus.slave.stb_i && !stall){
         state := Mux(io.bus.slave.we_i, STATE_WRITE, STATE_READ)
@@ -140,17 +138,22 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
                     we_o := false.B
                     adr_o := Cat(Seq(cur_tag, cur_index, 0.U(blockWidth)))
                     cyc_o := true.B                    
-                }.elsewhen(!r_dirtys(cur_index * wayCount.U + next_victim) || (wb_count === (blockSize - 1).U && ack_i)){
+                }.elsewhen(!r_dirtys(cur_index * wayCount.U + next_victim) || (wb_count === blockSize.U && ack_i)){
                     // we can safely remove this block
+                    printf("hoho %d %d %d\n", next_victim, r_tags(cur_index * wayCount.U + cur_way_index),
+                        r_valids(cur_index * wayCount.U + cur_way_index))
                     r_tags(cur_index * wayCount.U + next_victim) := cur_tag
                     r_valids(cur_index * wayCount.U + next_victim) := false.B
-                    next_victim := next_victim + 1.U
+                    if(wayCount != 1){
+                        next_victim := next_victim + 1.U
+                    }
                     ld_count := ld_count + 1.U
                     
                     we_o := false.B
                     adr_o := Cat(Seq(cur_tag, cur_index, 0.U(blockWidth.W)))
                     cyc_o := true.B
                 }.otherwise{
+                    printf("bad!\n");
                     // write back
                     val offset = Wire(UInt(blockWidth.W))
                     when(wb_count > 0.U && !io.bus.master.ack_i){
@@ -164,14 +167,6 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
                     we_o := true.B
                     cyc_o := true.B
                 }
-            }.elsewhen(ld_count === (blockSize - 1).U && ack_i){
-                val new_data = Vec(r_blocks(cur_index * wayCount.U + cur_way_index).toBools)
-                for(i <- 0 until 32){
-                    new_data(((ld_count - 1.U) << 5.U) + i.U) := dat_i(i)
-                }
-                r_blocks(cur_index * wayCount.U + cur_way_index) := new_data.asUInt
-                r_valids(cur_index * wayCount.U + cur_way_index) := true.B
-                r_dirtys(cur_index * wayCount.U + cur_way_index) := state === STATE_WRITE
             }.otherwise{
                 val offset = Wire(UInt(blockWidth.W))
                 when(!io.bus.master.ack_i){
@@ -185,13 +180,25 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
                     offset := wb_count << 2.U
                     ld_count := ld_count + 1.U
                 }
-                
-                we_o := false.B
-                adr_o := Cat(Seq(cur_tag, cur_index, offset))
-                cyc_o := true.B
+                when(ld_count === blockSize.U && ack_i){
+                    r_valids(cur_index * wayCount.U + cur_way_index) := true.B
+                    r_dirtys(cur_index * wayCount.U + cur_way_index) := state === STATE_WRITE
+                }.otherwise{
+                    we_o := false.B
+                    adr_o := Cat(Seq(cur_tag, cur_index, offset))
+                    cyc_o := true.B
+                }
             }
         }
 
     }
+
+    io.bus.master.cyc_o := cyc_o
+    io.bus.master.stb_o := cyc_o
+    io.bus.master.dat_o := dat_o
+    io.bus.master.we_o := we_o
+    io.bus.master.adr_o := adr_o
+    io.bus.master.sel_o := 0xf.U
+
 
 }
