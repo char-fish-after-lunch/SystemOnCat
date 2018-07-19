@@ -22,9 +22,6 @@ class DummyMemory extends Module{
 	val addr = Reg(UInt(21.W))
 	val get_data = Reg(UInt(32.W))
 
-	//val get_first :: get_second :: get_ready :: Nil = Enum(UInt(),4)
-	//val get = Reg(init = get_ready)
-
 	when(io.request){
 		addr := io.addr
 	}
@@ -32,11 +29,9 @@ class DummyMemory extends Module{
 	printf("In memory -> Addr: %x\n", addr)
 
 	when(addr === TestConsts.pte_1_addr.asUInt()){
-		//get := get_first
 		get_data := TestConsts.pte_1
 	}
 	when(addr === TestConsts.pte_2_addr.asUInt()){
-		//get := get_second
 		get_data := TestConsts.pte_2
 	}
 	
@@ -55,7 +50,6 @@ class DummyIO extends Bundle{
 }
 class DummyPTWIO extends Bundle{
 	val tlb = new TLBPTWIO()
-	//val tlb = new TLBPTWIO()
 	val mem = new PTWMEMIO()
 	val baseppn = Input(UInt(MemoryConsts.PPNLength.W))
 	val priv = Input(UInt(2.W))
@@ -110,7 +104,6 @@ class DummyPTW extends Module{
 }
 
 class DummyTLBIO extends Bundle{
-	//val vaddr = Input(UInt(32.W))
 	val vaddr = Input(UInt(MemoryConsts.VaLength.W))
 	val asid = Input(UInt(MemoryConsts.ASIDLength.W))
 	val passthrough = Input(Bool())
@@ -120,13 +113,6 @@ class DummyTLBIO extends Bundle{
 
 	val paddr = Output(UInt(MemoryConsts.PaLength.W))
 	val valid = Output(Bool())
-
-	//Page Fault Exception(Leave for PTW to solve)
-	//val iPF = Output(Bool())
-	//val lPF = Output(Bool())
-	//val sPF = Output(Bool()) 
-
-	//Interaction with PTW
 	val ptw = Flipped(new TLBPTWIO)
 }
 
@@ -168,13 +154,6 @@ class DummyTLB extends Module{
 	when(do_refill){
 		val waddr = refill_index
 		val refill_pte = io.ptw.pte_ppn
-		//val refill_ppn = refill_pte.ppn
-		//val newEntry = Wire(new TLBEntry)
-		//newEntry.ppn := refill_ppn
-		//newEntry.tag := refill_tag
-
-		//entries_valid(refill_index) := true.B
-		//entries(refill_index) := newEntry
 	}
 
 }
