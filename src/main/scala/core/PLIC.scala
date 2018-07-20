@@ -117,7 +117,7 @@ class PLIC() extends SysBusSlave(new PLICIO){
 	val ans = RegInit(UInt(32.W), 0.U)
 
 	state := req
-	ans := Mux(io.out.adr_i(2), Core1IR.asUInt(),Core2IR.asUInt())
+	ans := Mux(io.out.adr_i(2), Core2IR.asUInt(),Core1IR.asUInt())
 
 	io.out.ack_o := state
 	io.out.stall_o := false.B
@@ -126,8 +126,8 @@ class PLIC() extends SysBusSlave(new PLICIO){
 	io.out.dat_o := ans
 
 	when(req){
-		when(io.out.we_i){
-			val core = Mux(io.out.adr_i(2), Core1IR, Core2IR)
+		when(!io.out.we_i){
+			val core = Mux(io.out.adr_i(2), Core2IR, Core1IR)
 			switch(core){
 				is(InterruptID.KeyboardID){
 					keyboard_ip := false.B
@@ -140,7 +140,7 @@ class PLIC() extends SysBusSlave(new PLICIO){
 				}
 			}
 		}.otherwise{
-			switch(io.out.dat_i(1, 0)){
+			switch(io.out.dat_i(2, 0)){
 				is(InterruptID.KeyboardID){
 					keyboard_gate := false.B
 				}
