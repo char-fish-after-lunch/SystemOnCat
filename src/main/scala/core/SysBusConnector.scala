@@ -37,6 +37,7 @@ class SysBusConnectorIO extends Bundle {
     val external = new SysBusExternal()
     val mmu_csr_info = new CSRInfo()
     val mmu_expt = new MMUException()
+    val imem_pending = Output(Bool())
 }
 
 class SysBusConnector(irq_client: Client) extends Module {
@@ -81,14 +82,17 @@ class SysBusConnector(irq_client: Client) extends Module {
     val dmem_reg_en = RegInit(false.B)
     val imem_reg_en = RegInit(false.B)
 
-    dmem_reg_en := dmem_en
-    imem_reg_en := imem_en
+    when (!mmu.io.res.locked) {
+        dmem_reg_en := dmem_en
+        imem_reg_en := imem_en
+    }
 
     io.dmem.res.data_rd := 0.U(32.W)
     io.imem.res.data_rd := 0.U(32.W)
     io.dmem.res.locked := dmem_reg_en && mmu.io.res.locked
 
-    io.imem.res.locked := dmem_reg_en || (!dmem_reg_en && mmu.io.res.locked)
+    io.imem.res.locked := !dmem_reg_en && imem_reg_en && mmu.io.res.locked
+    io.imem_pending := dmem_reg_en
     io.dmem.res.err := false.B
     io.imem.res.err := false.B
 

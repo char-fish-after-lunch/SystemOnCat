@@ -42,5 +42,6 @@ class Core() extends Module {
     dpath.io.irq_client <> irq_client.io.in
 
     ifetch.io.bus <> bus_conn.io.imem
+    ifetch.io.pending <> bus_conn.io.imem_pending
     dmem.io.bus <> bus_conn.io.dmem
 }

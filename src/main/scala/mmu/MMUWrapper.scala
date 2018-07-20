@@ -55,7 +55,7 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
     val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
 
-    req_reg := io.req
+    req_reg := Mux(phase_1, req_reg, io.req) 
 
     phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid, io.req.wen || io.req.ren)
     // phase 1. vaddr -> paddr, 1 cycle if tlb hit, more cycles if tlb miss
@@ -84,7 +84,7 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     translator.io.out.adr_i := Mux(tlb.io.valid, tlb.io.paddr, ptw.io.mem.addr)
     translator.io.out.dat_i := Mux(tlb.io.valid, req_reg.data_wr, ptw.io.mem.addr)
     translator.io.out.sel_i := Mux(tlb.io.valid, req_reg.sel, "b1111".U(4.W))
-    translator.io.out.stb_i := Mux(tlb.io.valid, phase_1 || !prev_cache_hit, ptw.io.mem.request)
+    translator.io.out.stb_i := Mux(tlb.io.valid, phase_1 || prev_cache_hit, ptw.io.mem.request)
     translator.io.out.cyc_i := true.B
     translator.io.out.we_i := Mux(tlb.io.valid, req_reg.wen, false.B) // ptw never writes
 
