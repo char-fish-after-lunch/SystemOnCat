@@ -40,7 +40,7 @@ class MMUException extends Bundle {
 class MMUWrapperIO extends Bundle {
     val req = Input(new MMURequest)
     val res = new MMUResponse
-    val external = new SysBusExternal
+    //val external = new SysBusExternal
     val csr_info = new CSRInfo
     val expt = new MMUException 
 }
@@ -49,7 +49,7 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     val io = IO(new MMUWrapperIO)
     val ptw = Module(new PTW)
     val tlb = Module(new TLB)
-    val translator = Module(new SysBusTranslator(map, slaves))
+    //val translator = Module(new SysBusTranslator(map, slaves))
 
     val phase_1 = RegInit(false.B)
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
