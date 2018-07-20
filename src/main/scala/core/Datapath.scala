@@ -66,7 +66,7 @@ class Datapath() extends Module {
     val id_reg_expt_val = RegInit(UInt(), 0.U(32.W)) // addr stored for mtval
     val ex_reg_expt_val = RegInit(UInt(), 0.U(32.W))
     val mem_reg_expt_val = RegInit(UInt(), 0.U(32.W))
-    val mem_expt_val = RegInit(UInt(), 0.U(32.W))
+    val mem_expt_val = Wire(UInt())
 
     val id_reg_pc = RegInit(UInt(), 0.U(32.W))
     val ex_reg_pc = RegInit(UInt(), 0.U(32.W))
@@ -113,7 +113,7 @@ class Datapath() extends Module {
     val csr_reg_evec = RegInit(UInt(), 0.U(32.W))
     val wb_reg_interp = RegInit(Bool(), false.B) // used to decide next pc at the beginning of WB
 
-    val npc = Mux(imem_locked, pc, // pc stall because of imem lock (avoid mem access FSM interruption)
+    val npc = Mux(imem_locked || dmem_locked, pc, // pc stall because of imem lock (avoid mem access FSM interruption)
         Mux(wb_reg_interp, csr_reg_evec, // an interrupt/exception happened
         Mux(wb_reg_eret, csr_reg_epc,  // eret executed
         Mux(ex_branch_mistaken, ex_branch_target, // branch prediction failed
@@ -275,11 +275,15 @@ class Datapath() extends Module {
     io.dmem.addr := alu.io.out
     io.dmem.wr_en := ex_functioning && ex_ctrl_sigs.mem && isWrite(ex_ctrl_sigs.mem_cmd)
     io.dmem.rd_en := ex_functioning && ex_ctrl_sigs.mem && isRead(ex_ctrl_sigs.mem_cmd)
+    // tricky. 
+
     io.dmem.mem_type := ex_ctrl_sigs.mem_type
 
-    mem_reg_expt := Mux(mem_replay, mem_reg_expt, ex_reg_expt && ex_reg_valid)
-    mem_reg_cause := Mux(mem_replay, mem_reg_cause, ex_reg_cause) // no exception would happen during EXE
-    mem_reg_expt_val := Mux(mem_replay, mem_reg_expt_val, ex_reg_expt_val)
+    when (!mem_replay && !ex_replay) {
+        mem_reg_expt := ex_reg_expt && ex_reg_valid
+        mem_reg_cause := ex_reg_cause // no exception would happen during EXE
+        mem_reg_expt_val := ex_reg_expt_val
+    }
 
     mem_expt := (mem_reg_expt && mem_reg_valid) || io.dmem.wr_addr_invalid_expt || io.dmem.wr_access_err_expt ||
          io.dmem.rd_addr_invalid_expt || io.dmem.rd_access_err_expt
@@ -348,17 +352,6 @@ class Datapath() extends Module {
     io.mmu_csr_info.asid := csr.io.asid
     io.mmu_csr_info.priv := csr.io.priv
     io.mmu_csr_info.tlb_flush := false.B // TODO: add support for SFENCE.VMA to support tlb_flush
-    
-
-    val asid = Output(UInt(MemoryConsts.ASIDLength.W))
-    val mode = Output(Bool())
-    val priv = Output(UInt(2.W))
-
-    // val epc = Output(UInt(32.W))  //EPC
-
-    // val interp = Output(Bool())   // Interrupt Occur
-    // val expt = Output(Bool())     // Exception Occur
-    // val evec = Output(UInt(32.W)) //Exception Handler Entry
 
     val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
@@ -369,14 +362,14 @@ class Datapath() extends Module {
     csr_evec := csr.io.evec
 
     // ---------- WB -----------
-    wb_replay := imem_locked
+    wb_replay := dmem_locked || imem_locked
 
-    when (!wb_replay) {
-        wb_reg_interp := mem_interp && (!mem_replay)
-        wb_reg_eret := mem_eret && (!mem_replay)
+    when (!wb_replay && !mem_replay && mem_reg_valid) {
+        wb_reg_interp := mem_interp
+        wb_reg_eret := mem_eret
         csr_reg_epc := csr_epc
         csr_reg_evec := csr_evec
-        wb_reg_expt := mem_expt && mem_reg_valid && (!mem_replay)
+        wb_reg_expt := mem_expt
     }
 
     when (!wb_replay && mem_functioning) {
@@ -384,13 +377,13 @@ class Datapath() extends Module {
         wb_reg_pc := mem_reg_pc
         wb_reg_inst := mem_reg_inst
         wb_reg_wdata := mem_reg_wdata
+        dmem_reg := io.dmem.rd_data
     }
 
     wb_reg_valid := (mem_reg_valid && (!mem_replay)) || (wb_replay && wb_reg_valid)
     
     wb_functioning := wb_reg_valid && (!wb_reg_expt) && (!wb_replay)
 
-    dmem_reg := io.dmem.rd_data
     dmem_locked := io.dmem.locked
 
     reg_write := MuxLookup(wb_ctrl_sigs.wb_sel, wb_reg_wdata, Seq(
@@ -400,12 +393,16 @@ class Datapath() extends Module {
         WB_CSR -> csr.io.read_csr_dat
     )).asUInt
 
-    wb_reg_wdata_forward := reg_write
+    when (wb_functioning) {
+        wb_reg_wdata_forward := reg_write
+    }
+
     // temporary init
     // io.debug_devs.leds := alu.io.out
     io.debug_devs.leds := MuxLookup(io.debug_devs.dip_sw(1, 0), io.imem.inst, Seq(
-        1.U -> Cat(pc(7, 0), csr_epc(7, 0)), 
-        2.U -> Cat(io.dmem.rd_data(7, 0), io.dmem.wr_data(7, 0))
+        1.U -> io.dmem.addr(15, 0), 
+        2.U -> Cat(io.dmem.rd_data(7, 0), io.dmem.wr_data(7, 0)),
+        3.U -> alu.io.out(15, 0)
     ))
     io.debug_devs.dpy0 := pc(7, 0)
     io.debug_devs.dpy1 := npc(7, 0)
