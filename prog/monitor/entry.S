@@ -1,10 +1,12 @@
+#include "arch.h"
+
 .section .text
 .org 0x0
     .global _start
 
 _start:
     nop
-    li sp, 0xe700 
+    li sp, ADR_USTACK_TOP
     # set up the stack
     j start
 
@@ -48,10 +50,6 @@ _entry:
 
     la a2, stack_top
     sw sp, 0(a2)
-
-    #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
-    csrw mscratch, sp
-    #endif
 
     addi x2, x0, 0
     addi x3, x0, 0
@@ -187,8 +185,6 @@ _entry:
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
 .global _trap_entry
 _trap_entry:
-    nop
-    nop
     csrrw sp, mscratch, sp
     
     addi sp, sp, -4*31
@@ -259,7 +255,7 @@ _trap_entry:
     lw x30, 4*29(sp)
     lw x31, 4*30(sp)
 
-    addi sp, sp, 4
+    addi sp, sp, 4*31
 
     csrrw sp, mscratch, sp
     mret

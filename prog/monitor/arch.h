@@ -1,6 +1,7 @@
 #ifndef ARCH_H
 #define ARCH_H
 
+#define ADR_USTACK_TOP 0xe700
 #define ADR_SERIAL_BUF 0xf004
 #define ADR_SERIAL_DAT 0xf000
 #define PUTCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf)); \
@@ -43,6 +44,9 @@
 #define INT_MTIMER 7
 
 #define MIP_MTIP 7
+
+#define ADR_KSTACK_TOP 0xd700
+
 
 #endif
 

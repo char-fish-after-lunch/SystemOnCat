@@ -47,13 +47,19 @@ void get_line(){
     buffer[bn] = '\0';
 }
 
-void hex2str(unsigned x){
-    buffer[0] = '0'; buffer[1] = 'x';
+void hex2str(unsigned x, char* cbuffer){
+    cbuffer[0] = '0'; cbuffer[1] = 'x';
     int i;
     for(i = 0; i < 8; i ++){
-        buffer[2 + i] = HEX[(x >> ((7 - i) << 2)) & (0xf)];
+        cbuffer[2 + i] = HEX[(x >> ((7 - i) << 2)) & (0xf)];
     }
-    buffer[10] = '\0';
+    cbuffer[10] = '\0';
+}
+
+void print_hex(unsigned x){
+    char buf[16];
+    hex2str(x, buf);
+    print(buf);
 }
 
 
@@ -82,7 +88,8 @@ void print_help(){
     print("V <x> <y>  - View contents in [x, y].\n");
     print("D <x> <y>  - Disassemble contents in [x, y].\n");
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
-    print("T <x>      - Set time limit to x * 10 ms.\n");
+    print("T [<x>]    - Set time limit to x * 10 ms, "
+        "or check the current time limit setting if x is not specified.\n");
 #endif
 }
 
@@ -107,26 +114,22 @@ void trap(){
             default:
                 print("An unrecognized interrupt received!\n");
                 print("Cause: ");
-                hex2str(cause);
-                print(buffer);
+                print_hex(cause);
                 print("\n");
                 
                 print("EPC: ");
-                hex2str(read_csr(mepc));
-                print(buffer);
+                print_hex(read_csr(mepc));
                 print("\n");
         }
         clear_csr(mip, 1 << ((cause << 1) >> 1));
     } else{
         print("An unrecognized exception received!\n");
         print("Cause: ");
-        hex2str(cause);
-        print(buffer);
+        print_hex(cause);
         print("\n");
         
         print("EPC: ");
-        hex2str(read_csr(mepc));
-        print(buffer);
+        print_hex(read_csr(mepc));
         print("\n");
     }
 }
@@ -134,6 +137,9 @@ void trap(){
 
 void init(){
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+    // set up the interrupt stack
+    write_csr(mscratch, ADR_KSTACK_TOP);
+
     // set up trap vector
     write_csr(mtvec, _trap_entry);
     set_csr(mstatus, 8);
@@ -145,6 +151,8 @@ void init(){
     *((unsigned*)ADR_TMEL) = 0;
     set_csr(mie, 128);
     in_user = false;
+
+    time_lim = 100; // initial time limit 1000 ms
 #endif
 
     int i;
@@ -174,13 +182,11 @@ void jump_exe(){
     }
     
     print("Time used: 10 * ");
-    hex2str(time_count);
-    print(buffer);
+    print_hex(time_count);
     print(" ms\n");
 
     print("Time limit: 10 * ");
-    hex2str(time_lim);
-    print(buffer);
+    print_hex(time_lim);
     print(" ms\n");
 #endif
 }
@@ -189,12 +195,10 @@ void reg_exe(){
     int i;
     for(i = 0; i < REGSIZE; i ++){
         print("x(");
-        hex2str(i);
-        print(buffer);
+        print_hex(i);
         print(")  =  ");
         
-        hex2str(regs[i]);
-        print(buffer);
+        print_hex(regs[i]);
         print("\n");
     }
 }
@@ -206,8 +210,7 @@ void edit_exe(){
     unsigned adr = str2hex(c), val;
     while(true){
         print("[");
-        hex2str(adr);
-        print(buffer);
+        print_hex(adr);
         print("] ");
         get_line();
         if(!*buffer || !*(buffer+1))
@@ -312,8 +315,7 @@ void inst_exe(){
     unsigned adr = str2hex(c), val;
     while(true){
         print("[");
-        hex2str(adr);
-        print(buffer);
+        print_hex(adr);
         print("] ");
         get_line();
         val = inst2int(buffer);
@@ -336,12 +338,10 @@ void view_exe(){
     unsigned cnt = str2hex(c);
     while(cnt --){
         print("[");
-        hex2str(adr);
-        print(buffer);
+        print_hex(adr);
         print("] ");
         val = *((unsigned*)adr);
-        hex2str(val);
-        print(buffer);
+        print_hex(val);
         print("\n");
         adr += 4;
     }
@@ -369,18 +369,15 @@ void print_int2inst(unsigned val){
     print(INST_NAMES[i]);
     if(itype == ITYPE_R || itype == ITYPE_I || itype == ITYPE_U || itype == ITYPE_J){
         print(" ");
-        hex2str(GETBITS(val, 7, 11));
-        print(buffer);
+        print_hex(GETBITS(val, 7, 11));
     }
     if(itype == ITYPE_R || itype == ITYPE_I || itype == ITYPE_S || itype == ITYPE_B){
         print(" ");
-        hex2str(GETBITS(val, 15, 19));
-        print(buffer);
+        print_hex(GETBITS(val, 15, 19));
     }
     if(itype == ITYPE_R || itype == ITYPE_S || itype == ITYPE_B){
         print(" ");
-        hex2str(GETBITS(val, 20, 24));
-        print(buffer);        
+        print_hex(GETBITS(val, 20, 24));
     }
     unsigned imm = 0;
     if(itype != ITYPE_R){
@@ -407,17 +404,19 @@ void print_int2inst(unsigned val){
                 imm |= GETBITS(val, 31, 31) << 20;
         }
         print(" ");
-        hex2str(imm);
-        print(buffer);
+        print_hex(imm);
     }
 }
 
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
 void timelim_exe(){
     char* c = next_word(buffer);
-    if(!*c || !*(c+1))
-        return;
-    time_lim = str2hex(c);
+    if(!*c || !*(c+1)){
+        print("Time limit: 10 * ");
+        print_hex(time_lim);
+        print(" ms\n");
+    } else
+        time_lim = str2hex(c);
 }
 #endif
 
@@ -432,8 +431,7 @@ void disas_exe(){
     unsigned cnt = str2hex(c);
     while(cnt --){
         print("[");
-        hex2str(adr);
-        print(buffer);
+        print_hex(adr);
         print("] ");
         val = *((unsigned*)adr);
         print_int2inst(val);
