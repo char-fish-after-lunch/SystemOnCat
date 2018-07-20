@@ -28,6 +28,7 @@ class SysBusExternal extends Bundle {
     val ram = Flipped(new SysBusSlaveBundle)
     val serial = Flipped(new SysBusSlaveBundle)
     val irq_client = Flipped(new SysBusSlaveBundle)
+    val plic = Flipped(new SysBusSlaveBundle)
 }
 
 class SysBusConnectorIO extends Bundle {
@@ -36,7 +37,7 @@ class SysBusConnectorIO extends Bundle {
     val external = new SysBusExternal()
 }
 
-class SysBusConnector(irq_client: Client) extends Module {
+class SysBusConnector(irq_client: Client, plic: PLIC) extends Module {
     val io = IO(new SysBusConnectorIO())
 
     // val bus = Module(new RAMSlaveReflector())
@@ -48,18 +49,21 @@ class SysBusConnector(irq_client: Client) extends Module {
     val bus_map = Seq(
         // default -> 0
         BitPat("b00000000000000001111000000000???") -> 1.U(2.W),
-        BitPat("b000000100000000001000000000?????") -> 2.U(2.W)
+        BitPat("b000000100000000001000000000?????") -> 2.U(2.W),
+        BitPat("b00000010000000000100000000100???") -> 3.U(2.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(
         ram_slave,
         serial_slave,
-        irq_client
+        irq_client,
+        plic
     )
 
     val bus = Module(new SysBusTranslator(bus_map, bus_slaves))
     bus.io.in(0) <> ram_slave.io.out
     bus.io.in(1) <> serial_slave.io.out
     bus.io.in(2) <> io.external.irq_client
+    bus.io.in(3) <> io.external.plic
 
     val imem_en = io.imem.req.wen || io.imem.req.ren
     val dmem_en = io.dmem.req.wen || io.dmem.req.ren

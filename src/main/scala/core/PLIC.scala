@@ -5,7 +5,7 @@ import chisel3.util._
 import chisel3.Bits._
 
 import systemoncat.sysbus.SysBusSlave
-
+import systemoncat.devices.PLICInterface
 
 //object GateWayAddr{} implement by hardware can not be read/write by software
 
@@ -25,8 +25,13 @@ object InterruptID{
 	val ReservedID = 4.U(32.W)
 }
 
+class Serial_Bundle extends Bundle{
+
+}
+
 class PLICIO() extends Bundle{
 	//Interrupt Input
+	val external = new PLICInterface
 	val serial_irq_r = Input(Bool())
 	val keyboard_irq_r = Input(Bool())
 	val net_irq_r = Input(Bool())
@@ -65,22 +70,22 @@ class PLIC() extends SysBusSlave(new PLICIO){
 	val Core2IR = Reg(UInt(32.W))
 
 	//Interrupt Permission
-	plicio.serial_permission := ~serial_gate
-	plicio.keyboard_permission := ~keyboard_gate
-	plicio.net_permission := ~net_gate
+	plicio.external.serial_permission := ~serial_gate
+	plicio.external.keyboard_permission := ~keyboard_gate
+	plicio.external.net_permission := ~net_gate
 
 	//Interrupt Notification
-	when(plicio.serial_irq_r & ~serial_gate){ 
+	when(plicio.external.serial_irq_r & ~serial_gate){ 
 		printf("New Serial Request\n")
 		serial_ip := true.B
 		serial_gate := true.B
 	}
-	when(plicio.keyboard_irq_r & ~keyboard_gate){
+	when(plicio.external.keyboard_irq_r & ~keyboard_gate){
 		printf("New Keyboard Request\n")
 		keyboard_ip := true.B
 		keyboard_gate := true.B
 	}
-	when(plicio.net_irq_r & ~net_gate){
+	when(plicio.external.net_irq_r & ~net_gate){
 		printf("New Net Request\n")
 		net_ip := true.B
 		net_gate := true.B
