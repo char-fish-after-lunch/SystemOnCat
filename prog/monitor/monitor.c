@@ -178,7 +178,7 @@ void jump_exe(){
 
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
     if(time_lim <= time_count){
-        print("Programme killed prematurely for running out of time.\n");
+        print("User process killed prematurely for running out of time.\n");
     }
     
     print("Time used: 10 * ");
@@ -443,6 +443,19 @@ void disas_exe(){
 void start(){
     print("Welcome to System on Cat!\n");
     print("Monitor v0.1\n");
+    print("Build specs:\n");
+    print("  WITH_CSR = ");
+#ifdef WITH_CSR
+    print("on\n");
+#else
+    print("off\n");
+#endif
+    print("  WITH_INTERRUPT = ");
+#ifdef WITH_INTERRUPT
+    print("on\n");
+#else
+    print("off\n");
+#endif
 
     init();
     
