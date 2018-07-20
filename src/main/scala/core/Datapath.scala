@@ -65,7 +65,7 @@ class Datapath() extends Module {
     val id_reg_expt_val = RegInit(UInt(), 0.U(32.W)) // addr stored for mtval
     val ex_reg_expt_val = RegInit(UInt(), 0.U(32.W))
     val mem_reg_expt_val = RegInit(UInt(), 0.U(32.W))
-    val mem_expt_val = RegInit(UInt(), 0.U(32.W))
+    val mem_expt_val = Wire(UInt())
 
     val id_reg_pc = RegInit(UInt(), 0.U(32.W))
     val ex_reg_pc = RegInit(UInt(), 0.U(32.W))
