@@ -33,7 +33,7 @@ class MMUException extends Bundle {
 	val lPF = Output(Bool())
 	val sPF = Output(Bool())
 
-	//Page Fault PTE
+	//Page Fault Vaddr
 	val pf_vaddr = Output(UInt(MemoryConsts.VaLength.W))
 }
 
