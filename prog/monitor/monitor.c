@@ -14,18 +14,21 @@
 
 
 
+#define GETCHAR_BLK(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf0)); \
+    (c) = *((char*)ADR_SERIAL_DAT); }
+#define PUTCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf)); \
+    (*((char*)ADR_SERIAL_DAT) = (c));}
+
 #if defined(WITH_CSR) && defined(WITH_IRQ) && defined(WITH_INTERRUPT)
 char input_buffer[BUFSIZE];
 int bufh, buft;
+
 #define GETCHAR(c) {while(bufh == buft); \
     (c) = input_buffer[bufh ++]; \
     if(bufh == BUFSIZE) bufh = 0;}
 #else
-#define GETCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf0)); \
-    (c) = *((char*)ADR_SERIAL_DAT); }
+#define GETCHAR(c) {GETCHAR_BLK((c))}
 #endif
-#define PUTCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf)); \
-    (*((char*)ADR_SERIAL_DAT) = (c));}
 
 extern void _trap_entry(void);
 extern void _entry(unsigned adr);
@@ -49,6 +52,9 @@ unsigned regs[REGSIZE];
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
 extern bool in_user;
 extern unsigned time_count, time_lim; // secs
+extern unsigned* trap_frame;
+
+#define TRAP_REG(x) (trap_frame[(x) - 1])
 #endif
 
 void get_line(){
@@ -161,9 +167,11 @@ void trap(){
                 print("Exception: instruction misaligned @ ");
                 print_hex(read_csr(mtval));
                 print("\n");
+                ret = true;
                 break;
             case EXC_ILLEGAL_INST:
                 print("Exception: illegal instruction\n");
+                ret = true;
                 break;
             case EXC_LOAD_MISALIGN:
                 print("Exception: load misaligned @ ");
@@ -174,7 +182,29 @@ void trap(){
                 print("Exception: store misaligned @ ");
                 print_hex(read_csr(mtval));
                 print("\n");
+                ret = true;
                 break;
+#ifdef WITH_ECALL
+            case EXC_ECALL:
+                // check a1 (request code)
+                switch(TRAP_REG(11)){
+                    case ECALL_EXIT:
+                        ret = true;
+                        break;
+                    case ECALL_PUTCHAR:
+                        PUTCHAR(TRAP_REG(12));
+                        break;
+                    case ECALL_GETCHAR:
+                        GETCHAR_BLK(TRAP_REG(10)); // a0 stores the return value
+                        break;
+                    default:
+                        print("Unsupported request: ");
+                        print_hex(TRAP_REG(11));
+                        print("\n");
+                        ret = true;
+                }
+                break;
+#endif
             default:
                 print("An unrecognized exception received!\n");
                 print("Cause: ");
@@ -184,8 +214,9 @@ void trap(){
                 print("EPC: ");
                 print_hex(read_csr(mepc));
                 print("\n");
+                
+                ret = true;
         }
-        ret = true;
     }
     if(ret && in_user){
         // kill the user process
@@ -310,6 +341,8 @@ unsigned inst2int(char* c){
     unsigned inst_type = INST_CONFIG[i][0];
     unsigned tmp_val;
     bool re;
+    if(inst_type == ITYPE_F)
+        res = SETBITS(res, 7, 31, INST_CONFIG[i][2]);
     if(inst_type == ITYPE_R || inst_type == ITYPE_I ||
         inst_type == ITYPE_S || inst_type == ITYPE_B)
         res = SETBITS(res, 12, 14, INST_CONFIG[i][2]);
@@ -339,7 +372,7 @@ unsigned inst2int(char* c){
             return 0;
         res = SETBITS(res, 20, 24, tmp_val);
     }
-    if(inst_type != ITYPE_R){
+    if(inst_type != ITYPE_R && inst_type != ITYPE_F){
         c = next_word(c);
         re = parse_arg(c, &tmp_val);
         if(!re)
@@ -421,7 +454,8 @@ void print_int2inst(unsigned val){
         if((itype == ITYPE_R || itype == ITYPE_I || itype == ITYPE_S || itype == ITYPE_B) &&
             INST_CONFIG[i][2] != GETBITS(val, 12, 14))
             continue;
-        
+        if(itype == ITYPE_F && INST_CONFIG[i][2] != GETBITS(val, 7, 31))
+            continue;
         break;
     }
     if(i == INST_N){
@@ -443,7 +477,7 @@ void print_int2inst(unsigned val){
         print_hex(GETBITS(val, 20, 24));
     }
     unsigned imm = 0;
-    if(itype != ITYPE_R){
+    if(itype != ITYPE_R && itype != ITYPE_F){
         switch(itype){
             case ITYPE_I:
                 imm = GETBITS(val, 20, 31);
@@ -521,6 +555,12 @@ void start(){
 #endif
     print("  WITH_IRQ = ");
 #ifdef WITH_IRQ
+    print("on\n");
+#else
+    print("off\n");
+#endif
+    print("  WITH_ECALL = ");
+#ifdef WITH_ECALL
     print("on\n");
 #else
     print("off\n");

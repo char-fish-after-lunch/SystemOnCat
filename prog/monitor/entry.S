@@ -220,6 +220,9 @@ _trap_entry:
     sw x30, 4*29(sp)
     sw x31, 4*30(sp)
 
+    la ra, trap_frame
+    sw sp, 0(ra)
+
     la ra, trap
     jalr ra, ra, 0
 
@@ -274,5 +277,8 @@ time_count:
     .word 0x0
 .global time_lim
 time_lim:
+    .word 0x0
+.global trap_frame
+trap_frame:
     .word 0x0
 #endif

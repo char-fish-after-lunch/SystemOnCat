@@ -43,6 +43,7 @@
 #define EXC_ILLEGAL_INST 2
 #define EXC_LOAD_MISALIGN 4
 #define EXC_STORE_MISALIGN 6
+#define EXC_ECALL 11
 
 #define MIP_MTIP 7
 
@@ -58,6 +59,12 @@
 #define IRQ_KEYBOARD 2
 #define IRQ_NETWORK 3
 #define IRQ_RESERVED 4
+#endif
+
+#ifdef WITH_ECALL
+#define ECALL_EXIT 0
+#define ECALL_PUTCHAR 1
+#define ECALL_GETCHAR 2
 #endif
 
 #endif
