@@ -30,17 +30,17 @@ class CSRInfo extends Bundle {
 
 class MMUException extends Bundle {
     val iPF = Output(Bool())
-	val lPF = Output(Bool())
-	val sPF = Output(Bool())
+    val lPF = Output(Bool())
+    val sPF = Output(Bool())
 
-	//Page Fault Vaddr
-	val pf_vaddr = Output(UInt(MemoryConsts.VaLength.W))
+    //Page Fault PTE
+    val pf_vaddr = Output(UInt(MemoryConsts.VaLength.W))
 }
 
 class MMUWrapperIO extends Bundle {
     val req = Input(new MMURequest)
     val res = new MMUResponse
-    //val external = new SysBusExternal
+    val external = new SysBusExternal
     val csr_info = new CSRInfo
     val expt = new MMUException 
 }
@@ -49,13 +49,13 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     val io = IO(new MMUWrapperIO)
     val ptw = Module(new PTW)
     val tlb = Module(new TLB)
-    //val translator = Module(new SysBusTranslator(map, slaves))
+    val translator = Module(new SysBusTranslator(map, slaves))
 
     val phase_1 = RegInit(false.B)
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
     val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
 
-    req_reg := Mux(phase_1 && !prev_cache_hit, req_reg, io.req) 
+    req_reg := Mux(phase_1, req_reg, io.req) 
 
     phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid, io.req.wen || io.req.ren)
     // phase 1. vaddr -> paddr, 1 cycle if tlb hit, more cycles if tlb miss
