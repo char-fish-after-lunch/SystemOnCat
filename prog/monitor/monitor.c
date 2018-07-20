@@ -96,6 +96,7 @@ void print_help(){
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
 void trap(){
     unsigned cause = read_csr(mcause);
+    bool ret = false;
     if((int)cause < 0){
         // asynchronous interrupt
         switch((cause << 1) >> 1){
@@ -104,11 +105,9 @@ void trap(){
                 *((unsigned*)ADR_TMEL) = 0;
                 if(in_user){
                     ++ time_count;
-                    if(time_count == time_lim){
-                        // time is up
-                        write_csr(mepc, _exit);
-                        break;
-                    }
+                    // time is up
+                    if(time_count >= time_lim)
+                        ret = true;
                 }
                 break;
             default:
@@ -120,17 +119,44 @@ void trap(){
                 print("EPC: ");
                 print_hex(read_csr(mepc));
                 print("\n");
+                ret = true;
         }
         clear_csr(mip, 1 << ((cause << 1) >> 1));
     } else{
-        print("An unrecognized exception received!\n");
-        print("Cause: ");
-        print_hex(cause);
-        print("\n");
-        
-        print("EPC: ");
-        print_hex(read_csr(mepc));
-        print("\n");
+        switch(cause){
+            case EXC_INST_MISALIGN:
+                print("Exception: instruction misaligned @ ");
+                print_hex(read_csr(mtval));
+                print("\n");
+                break;
+            case EXC_ILLEGAL_INST:
+                print("Exception: illegal instruction\n");
+                break;
+            case EXC_LOAD_MISALIGN:
+                print("Exception: load misaligned @ ");
+                print_hex(read_csr(mtval));
+                print("\n");
+                break;
+            case EXC_STORE_MISALIGN:
+                print("Exception: store misaligned @ ");
+                print_hex(read_csr(mtval));
+                print("\n");
+                break;
+            default:
+                print("An unrecognized exception received!\n");
+                print("Cause: ");
+                print_hex(cause);
+                print("\n");
+                
+                print("EPC: ");
+                print_hex(read_csr(mepc));
+                print("\n");
+        }
+        ret = true;
+    }
+    if(ret && in_user){
+        // kill the user process
+        write_csr(mepc, _exit);
     }
 }
 #endif

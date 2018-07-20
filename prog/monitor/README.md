@@ -26,5 +26,7 @@ make
 ### Notes
 
 * Most arch-dependent configurations are placed in `arch.h`. You may modify it according to the architecture of your target platform if you are not building it for System on Cat.
-* All input integers (including immediates and register ids) must be in the hexadecimal form with prefix `0x`.
+* All input integers (including immediates and register ids) must be in the hexadecimal form with prefix `0x`. Spaces shall be used to separate the operands (no comma).
 * All input letters are case-sensitive. Input instructions must be lowercased.
+* The user process is invoked with the return address placed in register `ra` (`x1`) and shall therefore exit with `jalr zero, ra, 0`.
+

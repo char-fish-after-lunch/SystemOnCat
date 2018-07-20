@@ -43,6 +43,11 @@
 
 #define INT_MTIMER 7
 
+#define EXC_INST_MISALIGN 0
+#define EXC_ILLEGAL_INST 2
+#define EXC_LOAD_MISALIGN 4
+#define EXC_STORE_MISALIGN 6
+
 #define MIP_MTIP 7
 
 #define ADR_KSTACK_TOP 0xd700
