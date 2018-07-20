@@ -4,6 +4,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.Bits._
 
+import systemoncat.sysbus.SysBusSlave
+
 
 //object GateWayAddr{} implement by hardware can not be read/write by software
 
@@ -24,18 +26,6 @@ object InterruptID{
 }
 
 class PLICIO() extends Bundle{
-	//commands
-	val plic_en = Input(Bool())
-	val plic_rd_en = Input(Bool())
-	val plic_wr_en = Input(Bool())
-
-	//Selection Address
-	val addr = Input(UInt(32.W))
-
-	//Read Write Data
-	val read_plic_dat = Output(UInt(32.W))
-	val wb_plic_dat = Input(UInt(32.W))
-
 	//Interrupt Input
 	val serial_irq_r = Input(Bool())
 	val keyboard_irq_r = Input(Bool())
@@ -53,8 +43,9 @@ class PLICIO() extends Bundle{
 
 }
 
-class PLIC() extends Module{
-	val io = IO(new PLICIO)
+class PLIC() extends SysBusSlave(new PLICIO){
+	val plicio = Wire(new PLICIO)
+	io.in <> plicio
 
 	//GateWay Register
 	val serial_gate = Reg(Bool())
@@ -74,30 +65,30 @@ class PLIC() extends Module{
 	val Core2IR = Reg(UInt(32.W))
 
 	//Interrupt Permission
-	io.serial_permission := ~serial_gate
-	io.keyboard_permission := ~keyboard_gate
-	io.net_permission := ~net_gate
+	plicio.serial_permission := ~serial_gate
+	plicio.keyboard_permission := ~keyboard_gate
+	plicio.net_permission := ~net_gate
 
 	//Interrupt Notification
-	when(io.serial_irq_r & ~serial_gate){ 
+	when(plicio.serial_irq_r & ~serial_gate){ 
 		printf("New Serial Request\n")
 		serial_ip := true.B
 		serial_gate := true.B
 	}
-	when(io.keyboard_irq_r & ~keyboard_gate){
+	when(plicio.keyboard_irq_r & ~keyboard_gate){
 		printf("New Keyboard Request\n")
 		keyboard_ip := true.B
 		keyboard_gate := true.B
 	}
-	when(io.net_irq_r & ~net_gate){
+	when(plicio.net_irq_r & ~net_gate){
 		printf("New Net Request\n")
 		net_ip := true.B
 		net_gate := true.B
 	}
 
-	io.core1_ext_irq_r := (Core1IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core1IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core1IR === InterruptID.NetID & net_ip === true.B)
+	plicio.core1_ext_irq_r := (Core1IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core1IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core1IR === InterruptID.NetID & net_ip === true.B)
 
-	io.core2_ext_irq_r := (Core2IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core2IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core2IR === InterruptID.NetID & net_ip === true.B)
+	plicio.core2_ext_irq_r := (Core2IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core2IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core2IR === InterruptID.NetID & net_ip === true.B)
 
 
 	when(keyboard_ip){
@@ -122,56 +113,48 @@ class PLIC() extends Module{
 		Core2IR := InterruptID.NetID
 	}
 
-	//Register Read Logic(Interrupt Claim)
-	when(io.plic_en & io.plic_rd_en){
-		when(io.addr === InterruptRegisterAddr.Core1Addr){
-			printf("Core1 is Reading\n")
-			io.read_plic_dat := Core1IR.asUInt()
-			when( Core1IR === InterruptID.KeyboardID ){
-				keyboard_ip := false.B
-			} .elsewhen( Core1IR === InterruptID.SerialPortID ){
-				serial_ip := false.B
-			} .elsewhen( Core1IR === InterruptID.NetID ){
-				net_ip := false.B
-			}
-		} .elsewhen(io.addr === InterruptRegisterAddr.Core2Addr){
-			printf("Core2 is Reading\n")
-			io.read_plic_dat := Core2IR.asUInt()
-			when( Core2IR === InterruptID.KeyboardID ){
-				keyboard_ip := false.B
-			} .elsewhen( Core2IR === InterruptID.SerialPortID ){
-				serial_ip := false.B
-			} .elsewhen( Core2IR === InterruptID.NetID ){
-				net_ip := false.B
-			}
-		} .otherwise{
-			io.read_plic_dat := 0.U
-		}
-	} .otherwise{
-		io.read_plic_dat := 0.U
-	}
+	val req = io.out.cyc_i && io.out.stb_i
+	val we = req & io.out.we_i
 
-	//Register Write Logic
-	when(io.plic_en & io.plic_wr_en){
-		when(io.addr === InterruptRegisterAddr.Core1Addr){
-			when(io.wb_plic_dat === InterruptID.KeyboardID ){
-				keyboard_gate := false.B
-			} .elsewhen( io.wb_plic_dat === InterruptID.SerialPortID ){
-				//printf("-----------serial open------------\n")
-				serial_gate := false.B
-			} .elsewhen( io.wb_plic_dat === InterruptID.NetID ){
-				net_gate := false.B
+	val state = RegInit(Bool(), false.B)
+	val ans = RegInit(UInt(32.W), 0.U)
+
+	state := req
+	ans := Mux(io.out.adr_i(2), Core1IR.asUInt(),Core2IR.asUInt())
+
+	io.out.ack_o := state
+	io.out.stall_o := false.B
+	io.out.err_o := false.B
+	io.out.rty_o := false.B
+	io.out.dat_o := ans
+
+	when(req){
+		when(io.out.we_i){
+			val core = Mux(io.out.adr_i(2), Core1IR, Core2IR)
+			switch(core){
+				is(InterruptID.KeyboardID){
+					keyboard_ip := false.B
+				}
+				is(InterruptID.SerialPortID){
+					serial_ip := false.B
+				}
+				is(InterruptID.NetID){
+					net_ip := false.B
+				}
 			}
-		} .elsewhen(io.addr === InterruptRegisterAddr.Core2Addr){
-			when( io.wb_plic_dat === InterruptID.KeyboardID ){
-				keyboard_gate := false.B
-			} .elsewhen( io.wb_plic_dat === InterruptID.SerialPortID ){
-				serial_gate := false.B
-			} .elsewhen( io.wb_plic_dat === InterruptID.NetID ){
-				net_gate := false.B
+		}.otherwise{
+			switch(io.out.dat_i(1, 0)){
+				is(InterruptID.KeyboardID){
+					keyboard_gate := false.B
+				}
+				is(InterruptID.SerialPortID){
+					serial_gate := false.B
+				}
+				is(InterruptID.NetID){
+					net_gate := false.B
+				}
 			}
 		}
 	}
-
 }
 

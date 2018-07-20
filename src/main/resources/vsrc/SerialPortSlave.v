@@ -30,6 +30,10 @@ output reg uart_start;
 output reg [7:0] uart_dat_o;
 input wire [7:0] uart_dat_i;
 
+// ------------------- PLIC interface ----------------
+output wire irq;
+input wire irq_permitted;
+
 // ------------------ buffer --------------------
 reg [7:0] dat_received[15:0];
 reg [7:0] dat_to_send[15:0];
@@ -159,5 +163,7 @@ assign dat_o = {{24{1'b0}}, ans};
 
 assign stall = (state != STATE_IDLE) & ~ack & (state != STATE_ERR);
 assign stall_o = stall;
+
+assign irq = irq_permitted & (dat_recv_he != dat_recv_ta);
 
 endmodule
