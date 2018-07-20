@@ -202,6 +202,6 @@ class MMUWrapperTester() extends BasicTester{
 class MMUWrapperTests extends org.scalatest.FlatSpec {
     "MMUWrapperTests" should "pass" in {
         assert(TesterDriver execute (() => new MMUWrapperTester()))
-        assert(1 === 2)
+        //assert(1 === 2)
     }
 }
