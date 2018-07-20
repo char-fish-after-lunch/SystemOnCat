@@ -173,7 +173,8 @@ class CSRFileIO() extends Bundle{
     val tmr_irq_r = Input(Bool()) //timer interrupt
 
     // interrupt message
-    val sig = Input(new ControlSignals()) //interrupt instruction message
+    // val sig = Input(new ControlSignals()) //interrupt instruction message
+    val next_pc = Input(Bool())
     val inst = Input(UInt(32.W))           //interrupt instruction
     val pc  = Input(UInt(32.W))           //interrupt pc
     val addr = Input(UInt(32.W))          //interrupt address
@@ -325,7 +326,7 @@ class CSRFile() extends Module{
   io.epc := mepc
   io.interrupt := false.B
   //Interrupt Request
-  val next_pc = Mux((io.sig.jal | io.sig.jalr | io.sig.branch), (io.pc >> 2 << 2), (io.pc >> 2 << 2) + 4.U(32.W))
+  val next_pc = Mux(io.next_pc, (io.pc >> 2 << 2) + 4.U(32.W), (io.pc >> 2 << 2))
   mip.meip := io.ext_irq_r
   mip.mtip := io.tmr_irq_r
   mip.msip := io.sft_irq_r

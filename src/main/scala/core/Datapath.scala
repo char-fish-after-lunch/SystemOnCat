@@ -82,11 +82,10 @@ class Datapath() extends Module {
     val ex_reg_imme = RegInit(UInt(), 0.U(32.W)) // 32 bit immediate, sign extended if necessary
 
     val csr_branch = Wire(Bool()) // when csr branch happens, all prev stages will be flushed
-    val csr_flush_vector = Wire(Bits(4.W)) // whether pc, id, exe, mem should be flushed after csr branch
 
     // ---------- NPC ----------
     val pc = RegInit((-4).S(32.W).asUInt) // initial pc
-    pc_reg_valid := !(csr_branch && csr_flush_vector(3))
+    pc_reg_valid := !csr_branch
     val ex_branch_mistaken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
 
@@ -133,7 +132,7 @@ class Datapath() extends Module {
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
     id_replay := id_exe_data_hazard || id_csr_data_hazard || dmem_locked || imem_locked
     id_reg_valid := ((!id_jump_expected && !ex_branch_mistaken && !pc_stall && pc_reg_valid) || (id_replay && id_reg_valid)) &&
-         (!(csr_branch && csr_flush_vector(2)))
+         (!csr_branch)
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
     
@@ -195,7 +194,7 @@ class Datapath() extends Module {
         ex_reg_pc := id_reg_pc
     }
     ex_reg_valid := ((id_reg_valid && (!id_exe_data_hazard) && (!id_csr_data_hazard)) || ex_replay) &&
-        (!ex_branch_mistaken) && (!(csr_branch && csr_flush_vector(1))) // tricky
+        (!ex_branch_mistaken) && (!csr_branch) // tricky
 
     ex_reg_expt := Mux(ex_replay, ex_reg_expt, id_expt && id_reg_valid) 
     ex_reg_cause := Mux(ex_replay, ex_reg_cause,
@@ -264,7 +263,7 @@ class Datapath() extends Module {
 
 
     mem_replay := dmem_locked
-    mem_reg_valid := (ex_reg_valid || mem_replay) && (!(csr_branch && csr_flush_vector(0)))
+    mem_reg_valid := (ex_reg_valid || mem_replay) && (!csr_branch)
 
     io.dmem.wr_data := ex_rs(1)
     io.dmem.addr := alu.io.out
@@ -293,8 +292,6 @@ class Datapath() extends Module {
 
     // ---------- CSR & Interrupt Client -----------
     val csr = Module(new CSRFile)
-    csr.io.sig := wb_ctrl_sigs
-    csr.io.inst := wb_reg_inst
 
     val last_valid_pc_from_wb = Mux(mem_reg_valid, mem_reg_pc, 
         Mux(ex_reg_valid, ex_reg_pc, 
@@ -302,9 +299,8 @@ class Datapath() extends Module {
     // I guess there should be at least one valid instruction in pipeline...
     // also, even if the instruction will cause an exception, it's still valid.
     // so we check 'valid' instead of 'functioning' here.
-    csr_flush_vector := Mux(mem_reg_valid, "b1111".U, 
-        Mux(ex_reg_valid, "b1110".U, 
-        Mux(id_reg_valid, "b1100".U, "b1000".U))) 
+    csr.io.next_pc := Mux(mem_reg_valid, !(mem_ctrl_sigs.jal || mem_ctrl_sigs.jalr || mem_ctrl_sigs.branch), false.B)
+    csr.io.inst := wb_reg_inst 
 
     csr.io.pc := last_valid_pc_from_wb
     csr.io.addr := Mux(mem_expt && mem_reg_valid, mem_expt_val, io.mmu_expt.pf_vaddr)
