@@ -41,14 +41,14 @@ class Core() extends Module {
     dpath.io.imem <> ifetch.io.core
     dpath.io.dmem <> dmem.io.core
     dpath.io.irq_client <> irq_client.io.in
-    dpath.io.plic <> plic.io.in
 
     ifetch.io.bus <> bus_conn.io.imem
     dmem.io.bus <> bus_conn.io.dmem
 
     // temporarily, no such devices
 
-    val plicio = Wire(new PLICIO)
-    plicio <> plic.io.in
-    plicio.external <> io.plic_interface
+    val bridge = Wire(new PLICIO)
+    bridge <> plic.io.in
+    io.plic_interface <> bridge.external
+    bridge.core1_ext_irq_r <> dpath.io.core1_ext_irq_r
 }

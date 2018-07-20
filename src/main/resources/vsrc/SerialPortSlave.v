@@ -2,7 +2,7 @@ module SerialPortSlave(dat_i, dat_o, ack_o, adr_i, cyc_i,
     err_o, rty_o, sel_i, stb_i, we_i, stall_o,
     clk_bus, rst_bus, 
     uart_clk, uart_busy, uart_ready, uart_start,
-    uart_dat_i, uart_dat_o);
+    uart_dat_i, uart_dat_o, irq, irq_permitted);
 
 input wire clk_bus;
 input wire rst_bus;

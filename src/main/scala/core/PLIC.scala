@@ -31,20 +31,11 @@ class Serial_Bundle extends Bundle{
 
 class PLICIO() extends Bundle{
 	//Interrupt Input
-	val external = new PLICInterface
-	val serial_irq_r = Input(Bool())
-	val keyboard_irq_r = Input(Bool())
-	val net_irq_r = Input(Bool())
-	val reserved_irq_r = Input(Bool())
+	val external = Flipped(new PLICInterface)
 
 	//Interrupt Output
 	val core1_ext_irq_r = Output(UInt(32.W))
 	val core2_ext_irq_r = Output(UInt(32.W))
-
-	//GateWay Output
-	val serial_permission = Output(Bool())
-	val keyboard_permission = Output(Bool())
-	val net_permission = Output(Bool())
 
 }
 
@@ -73,6 +64,7 @@ class PLIC() extends SysBusSlave(new PLICIO){
 	plicio.external.serial_permission := ~serial_gate
 	plicio.external.keyboard_permission := ~keyboard_gate
 	plicio.external.net_permission := ~net_gate
+	plicio.external.reserved_permission := false.B
 
 	//Interrupt Notification
 	when(plicio.external.serial_irq_r & ~serial_gate){ 
