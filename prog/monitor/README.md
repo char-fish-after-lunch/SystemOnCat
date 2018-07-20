@@ -5,6 +5,7 @@ Inspired by the monitor routine for 16-bit THINPAD.
 ### Features
 * All the features the 16-bit THINPAD monitor has.
 * An optional timer that can report the time used by a user process when it terminates and kill it when it runs out of time.
+* The optional choice of using the IRQ mechanism for serial inputting.
 
 ### Prerequisites
 
@@ -18,7 +19,17 @@ Bare mainbody:
 make CFLAGS=   
 ```
 
-With interrupt and CSR functionalities:
+With interrupt functionalities:
+```
+make -DWITH_CSR -DWITH_INTERRUPT
+```
+
+With IRQ functionalities:
+```
+make -DWITH_CSR -DWITH_IRQ
+```
+
+With full functionalities:
 ```
 make
 ```

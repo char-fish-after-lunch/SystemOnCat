@@ -4,7 +4,7 @@ LD := $(ARCH_PREF)ld
 OBJDUMP := $(ARCH_PREF)objdump
 OBJCOPY := $(ARCH_PREF)objcopy
 MARCH := rv32i
-CFLAGS := -DWITH_CSR -DWITH_INTERRUPT
+CFLAGS := -DWITH_CSR -DWITH_INTERRUPT -DWITH_IRQ
 
 all: disas.S monitor.bin
 

@@ -12,6 +12,21 @@
 #define GETBITS(src, ld, rd) (((src) >> (ld)) & ((1 << ((rd) - (ld) + 1)) - 1))
 #define SETBITS(dest, ld, rd, src) ((dest) | (GETBITS((src), 0, (rd) - (ld)) << (ld)))
 
+
+
+#if defined(WITH_CSR) && defined(WITH_IRQ) && defined(WITH_INTERRUPT)
+char input_buffer[BUFSIZE];
+int bufh, buft;
+#define GETCHAR(c) {while(bufh == buft); \
+    (c) = input_buffer[bufh ++]; \
+    if(bufh == BUFSIZE) bufh = 0;}
+#else
+#define GETCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf0)); \
+    (c) = *((char*)ADR_SERIAL_DAT); }
+#endif
+#define PUTCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf)); \
+    (*((char*)ADR_SERIAL_DAT) = (c));}
+
 extern void _trap_entry(void);
 extern void _entry(unsigned adr);
 extern void _exit(void);
@@ -95,6 +110,9 @@ void print_help(){
 
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
 void trap(){
+#ifdef WITH_IRQ
+    unsigned irq_source;
+#endif
     unsigned cause = read_csr(mcause);
     bool ret = false;
     if((int)cause < 0){
@@ -110,6 +128,21 @@ void trap(){
                         ret = true;
                 }
                 break;
+#ifdef WITH_IRQ
+            case INT_MIRQ:
+                irq_source = *((unsigned*)ADR_PLIC);
+                switch(irq_source){
+                    case IRQ_SERIAL:
+                        while(*((unsigned*)ADR_SERIAL_BUF) & 0xf0){
+                            input_buffer[buft ++] = *((char*)ADR_SERIAL_DAT);
+                            if(buft == BUFSIZE)
+                                buft = 0;
+                        }
+                        break;
+                }
+                *((unsigned*)ADR_PLIC) = irq_source;
+                break;
+#endif
             default:
                 print("An unrecognized interrupt received!\n");
                 print("Cause: ");
@@ -163,6 +196,10 @@ void trap(){
 
 void init(){
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
+#ifdef WITH_IRQ
+    bufh = buft = 0;
+#endif
+
     // set up the interrupt stack
     write_csr(mscratch, ADR_KSTACK_TOP);
 
@@ -175,7 +212,7 @@ void init(){
     *((unsigned*)ADR_CMPL) = 125000;
     *((unsigned*)ADR_TMEH) = 0;
     *((unsigned*)ADR_TMEL) = 0;
-    set_csr(mie, 128);
+    set_csr(mie, (1 << INT_MTIMER) | (1 << INT_MIRQ));
     in_user = false;
 
     time_lim = 100; // initial time limit 1000 ms
@@ -478,6 +515,12 @@ void start(){
 #endif
     print("  WITH_INTERRUPT = ");
 #ifdef WITH_INTERRUPT
+    print("on\n");
+#else
+    print("off\n");
+#endif
+    print("  WITH_IRQ = ");
+#ifdef WITH_IRQ
     print("on\n");
 #else
     print("off\n");

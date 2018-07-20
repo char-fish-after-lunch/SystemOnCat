@@ -4,11 +4,6 @@
 #define ADR_USTACK_TOP 0xe700
 #define ADR_SERIAL_BUF 0xf004
 #define ADR_SERIAL_DAT 0xf000
-#define PUTCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf)); \
-    (*((char*)ADR_SERIAL_DAT) = (c));}
-#define GETCHAR(c) {while(!((*((unsigned*)ADR_SERIAL_BUF)) & 0xf0)); \
-    (c) = *((char*)ADR_SERIAL_DAT); }
-
 
 #ifdef WITH_CSR
 
@@ -42,6 +37,7 @@
 #define ADR_MSIP 0b00000010000000000100000000010000
 
 #define INT_MTIMER 7
+#define INT_MIRQ 11
 
 #define EXC_INST_MISALIGN 0
 #define EXC_ILLEGAL_INST 2
@@ -56,6 +52,13 @@
 #endif
 
 
+#ifdef WITH_IRQ
+#define ADR_PLIC 0b00000010000000000100000000100100
+#define IRQ_SERIAL 1
+#define IRQ_KEYBOARD 2
+#define IRQ_NETWORK 3
+#define IRQ_RESERVED 4
+#endif
 
 #endif
 
