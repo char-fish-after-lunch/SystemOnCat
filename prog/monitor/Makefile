@@ -4,6 +4,7 @@ LD := $(ARCH_PREF)ld
 OBJDUMP := $(ARCH_PREF)objdump
 OBJCOPY := $(ARCH_PREF)objcopy
 MARCH := rv32i
+CFLAGS := -DWITH_CSR -DWITH_INTERRUPT -DWITH_IRQ -DWITH_ECALL
 
 all: disas.S monitor.bin
 
@@ -18,10 +19,10 @@ out.o: entry.o monitor.o
 	$(LD) -nostdlib -N -e _start -Ttext 0x0 entry.o monitor.o -o out.o
 
 entry.o: entry.S
-	$(GCC) -c -march=$(MARCH) -o entry.o entry.S
+	$(GCC) -c -march=$(MARCH) $(CFLAGS) -fno-builtin -o entry.o entry.S
 
-monitor.o: monitor.c inst.h
-	$(GCC) -c -march=$(MARCH) -o monitor.o monitor.c
+monitor.o: monitor.c inst.h arch.h
+	$(GCC) -c -march=$(MARCH) $(CFLAGS) -fno-builtin -o monitor.o monitor.c
 
 clean:
 	rm -rf *.o

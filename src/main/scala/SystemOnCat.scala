@@ -10,4 +10,5 @@ class SystemOnCat extends Module {
     core.io.devs <> io.devs
     core.io.ram <> io.ram
     core.io.serial <> io.serial
+    core.io.plic_interface <> io.plic_interface
 }
