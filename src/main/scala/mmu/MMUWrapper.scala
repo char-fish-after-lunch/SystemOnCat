@@ -88,7 +88,7 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     translator.io.out.cyc_i := true.B
     translator.io.out.we_i := Mux(tlb.io.valid, req_reg.wen, false.B) // ptw never writes
 
-    val paddr_reg_accessing = RegInit(Bool(), false.B)
+    val paddr_reg_accessing = RegInit(Bool(), true.B)
     val ptw_reg_accessing = RegInit(Bool(), false.B)
 
     paddr_reg_accessing := tlb.io.valid // if tlb is valid in the prev cycle, then in the next cycle r/w is finished

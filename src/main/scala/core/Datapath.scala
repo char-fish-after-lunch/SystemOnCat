@@ -101,12 +101,15 @@ class Datapath() extends Module {
     val id_replay = Wire(Bool()) //happens when stalled
     val ex_replay = Wire(Bool())
     val mem_replay = Wire(Bool())
+    val mem_reg_replay = RegInit(Bool(), false.B)
     val wb_replay = Wire(Bool())
 
     val csr_epc = Wire(UInt())
     val mem_eret = Wire(Bool())
     val csr_evec = Wire(UInt())
     val mem_interp = Wire(Bool()) // used to flush pipeline at the end of MEM
+    val prev_mem_interp = RegInit(Bool(), false.B) 
+    // interrupt signal from csr keeps only for 1 cycle, therefore it has to be kept for future reference
 
     val csr_reg_epc = RegInit(UInt(), 0.U(32.W))
     val wb_reg_eret = RegInit(Bool(), false.B)
@@ -268,8 +271,8 @@ class Datapath() extends Module {
     }
     // alu.io.cmp_out decides whether a branch is taken
 
-
     mem_replay := dmem_locked || imem_locked
+    mem_reg_replay := mem_replay
     mem_reg_valid := ((ex_reg_valid && !ex_replay) || (mem_replay && mem_reg_valid)) && (!csr_branch)
     io.dmem.wr_data := ex_rs(1)
     io.dmem.addr := alu.io.out
@@ -355,7 +358,11 @@ class Datapath() extends Module {
 
     val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
-    mem_interp := mem_has_exception || mem_has_interrupt
+    val cur_mem_interp = mem_has_exception || mem_has_interrupt
+    prev_mem_interp := Mux(mem_reg_replay, prev_mem_interp || cur_mem_interp, cur_mem_interp) 
+    mem_interp := cur_mem_interp || prev_mem_interp
+    // tricky. collect all interrupts happened during memory stall.
+
     mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_functioning
     csr_branch := mem_interp || mem_eret
     csr_epc := csr.io.epc
@@ -402,7 +409,10 @@ class Datapath() extends Module {
     io.debug_devs.leds := MuxLookup(io.debug_devs.dip_sw(1, 0), io.imem.inst, Seq(
         1.U -> io.dmem.addr(15, 0), 
         2.U -> Cat(io.dmem.rd_data(7, 0), io.dmem.wr_data(7, 0)),
-        3.U -> alu.io.out(15, 0)
+        3.U -> Cat(id_reg_valid, ex_reg_valid, mem_reg_valid, id_reg_expt,
+            ex_reg_expt, mem_reg_expt, wb_reg_expt, wb_reg_interp, 
+            cur_mem_interp, prev_mem_interp, mem_has_exception, io.irq_client.sft_irq_r,
+            io.irq_client.tmr_irq_r, csr_branch, mem_reg_replay, mem_replay)
     ))
     io.debug_devs.dpy0 := pc(7, 0)
     io.debug_devs.dpy1 := npc(7, 0)
