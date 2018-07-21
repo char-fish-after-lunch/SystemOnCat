@@ -14,15 +14,16 @@ nop
 mv x1, x0
 mv x2, x0
 mv x3, x0
-addi x1, x0, 0x48
+la x1, data
 addi x2, x0, 10
 addi x3, x0, 0
-li x10, 0xf000
+li x10, 0x100
 loop:
 lbu x4, 0(x1)
 sw x4, 0(x10)
 addi x3, x3, 1
 addi x1, x1, 1
+addi x10, x10, 4
 bne x2, x3, loop
 nop
 nop
