@@ -20,8 +20,14 @@ class IFetchIO extends Bundle {
 
 class IFetch extends Module {
     val io = IO(new IFetchIO)
-    val pc_invalid = io.core.pc(1, 0) =/= 0.U(2.W)
-    io.bus.req.addr := io.core.pc
+
+    val prev_pc = RegInit(0.U(32.W))
+    prev_pc := Mux(io.bus.res.locked, prev_pc, io.core.pc)
+    val cur_pc = Mux(io.bus.res.locked, prev_pc, io.core.pc)
+    val pc_invalid = cur_pc(1, 0) =/= 0.U(2.W)
+    // pc has to be recorded for multi-cycle accessing
+
+    io.bus.req.addr := cur_pc
     io.bus.req.data_wr := 0.U(32.W)
     io.bus.req.sel := 15.U(4.W)
     io.bus.req.wen := false.B
