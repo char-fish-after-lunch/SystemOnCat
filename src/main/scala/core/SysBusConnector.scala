@@ -29,6 +29,8 @@ class SysBusExternal extends Bundle {
     val serial = Flipped(new SysBusSlaveBundle)
     val irq_client = Flipped(new SysBusSlaveBundle)
     val plic = Flipped(new SysBusSlaveBundle)
+    val flash = Flipped(new SysBusSlaveBundle)
+    val rom = Flipped(new SysBusSlaveBundle)
 }
 
 class SysBusConnectorIO extends Bundle {
@@ -37,26 +39,32 @@ class SysBusConnectorIO extends Bundle {
     val external = new SysBusExternal()
 }
 
-class SysBusConnector(irq_client: Client, plic: PLIC) extends Module {
+class SysBusConnector(irq_client: Client, plic: PLIC, rom: ROM) extends Module {
     val io = IO(new SysBusConnectorIO())
 
     // val bus = Module(new RAMSlaveReflector())
     val ram_slave = Module(new RAMSlaveReflector())
     val serial_slave = Module(new SerialPortSlaveReflector())
+    val flash_slave = Module(new FlashSlaveReflector())
     ram_slave.io.in <> io.external.ram
     serial_slave.io.in <> io.external.serial
+    flash_slave.io.in <> io.external.flash
 
     val bus_map = Seq(
         // default -> 0
-        BitPat("b00000000000000001111000000000???") -> 1.U(2.W),
-        BitPat("b000000100000000001000000000?????") -> 2.U(2.W),
-        BitPat("b00000010000000000100000000100???") -> 3.U(2.W)
+        BitPat("b00000000000000001111000000000???") -> 1.U(3.W),
+        BitPat("b000000100000000001000000000?????") -> 2.U(3.W),
+        BitPat("b00000010000000000100000000100???") -> 3.U(3.W),
+        BitPat("b00000010000000000100000000101???") -> 4.U(3.W),
+        BitPat("b11111111111111111111111111??????") -> 5.U(3.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(
         ram_slave,
         serial_slave,
         irq_client,
-        plic
+        plic,
+        flash_slave,
+        rom
     )
 
     val bus = Module(new SysBusTranslator(bus_map, bus_slaves))
@@ -64,6 +72,8 @@ class SysBusConnector(irq_client: Client, plic: PLIC) extends Module {
     bus.io.in(1) <> serial_slave.io.out
     bus.io.in(2) <> io.external.irq_client
     bus.io.in(3) <> io.external.plic
+    bus.io.in(4) <> flash_slave.io.out
+    bus.io.in(5) <> io.external.rom
 
     val imem_en = io.imem.req.wen || io.imem.req.ren
     val dmem_en = io.dmem.req.wen || io.dmem.req.ren
