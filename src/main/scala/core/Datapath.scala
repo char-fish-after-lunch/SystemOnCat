@@ -310,9 +310,10 @@ class Datapath() extends Module {
     
     // Trap Instruction
     val mem_is_eret = mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET
+    val wb_is_eret = wb_reg_inst === MRET || wb_reg_inst === URET || wb_reg_inst === SRET
     csr.io.isEcall := mem_reg_inst === ECALL && mem_functioning
     csr.io.isEbreak := mem_reg_inst === EBREAK && mem_functioning
-    csr.io.isEret := mem_is_eret && mem_functioning
+    csr.io.isEret := wb_is_eret && wb_functioning
     
     // page Fault. TODO: this should be assigned after implementing MMU
     csr.io.iPF := false.B //Instruction Page Fault 
