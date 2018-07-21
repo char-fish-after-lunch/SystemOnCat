@@ -203,6 +203,7 @@ void trap(){
                         print("\n");
                         ret = true;
                 }
+                write_csr(mepc, read_csr(mepc) + 4); // for ecall epc points to itself
                 break;
 #endif
             default:
@@ -243,7 +244,11 @@ void init(){
     *((unsigned*)ADR_CMPL) = 125000;
     *((unsigned*)ADR_TMEH) = 0;
     *((unsigned*)ADR_TMEL) = 0;
+#ifdef WITH_IRQ 
     set_csr(mie, (1 << INT_MTIMER) | (1 << INT_MIRQ));
+#else
+    set_csr(mie, (1 << INT_MTIMER));
+#endif
     in_user = false;
 
     time_lim = 100; // initial time limit 1000 ms
