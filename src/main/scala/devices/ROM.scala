@@ -10,19 +10,19 @@ import chisel3.util.{log2Up, Cat}
 import java.io.{File, FileInputStream}
 
 object ROM{
-    private def loadData(dataFile : String) : List[Byte] = {
+    private def loadData(dataFile : String) : List[Short] = {
         val file = new File(dataFile)
         val in = new FileInputStream(file)
 
         val loop = new Breaks
-        val data = new ListBuffer[Byte]
+        val data = new ListBuffer[Short]
 
         loop.breakable{
             while(true){
                 val ibyte = in.read()
                 if(ibyte == -1)
                     loop.break
-                data += ibyte.toByte
+                data += ibyte.toShort
             }
         }
 
@@ -32,9 +32,19 @@ object ROM{
     }
 }
 
-class ROM(dataFile : String) extends SysBusSlave(new Bundle(){}){
+class DumbBundle extends Bundle{
+    val dumb = Output(Bool()) // to make chisel happy
+    // for chisel does not allow empty bundles
+}
+
+class ROM(dataFile : String) extends SysBusSlave(new DumbBundle){
+    val db = Wire(new DumbBundle)
+    io.in <> db
+
     val data = ROM.loadData(dataFile)
     val len = data.length
+    println("Length of ROM firmware: " + len)
+
     val adr_width = log2Up(len)
 
     val req = RegInit(Bool(), false.B)
@@ -49,10 +59,14 @@ class ROM(dataFile : String) extends SysBusSlave(new Bundle(){}){
     io.out.err_o := false.B
     io.out.rty_o := false.B
 
+    db.dumb := false.B // to make chisel happy
+
     val ans = Seq(Wire(UInt(8.W)),
         Wire(UInt(8.W)),
         Wire(UInt(8.W)),
         Wire(UInt(8.W)))
+    for(i <- 0 until 4)
+        ans(i) := 0.U
 
     for(i <- 0 until (1 << adr_width)){
         when((i >> 2).U === dat_req(adr_width - 1, 2)){

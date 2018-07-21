@@ -3,6 +3,7 @@ package systemoncat.core
 import chisel3._
 import chisel3.util._
 import systemoncat.sysbus._
+import systemoncat.devices.ROM
 import systemoncat.devices.PLICInterface
 
 class DebugDevicesIO() extends Bundle {
@@ -30,13 +31,15 @@ class Core() extends Module {
     val dmem = Module(new DMem)
     val irq_client = Module(new Client)
     val plic = Module(new PLIC)
-    val bus_conn = Module(new SysBusConnector(irq_client, plic))
+    val rom = Module(new ROM("prog/firmware/mastercat.bin"))
+    val bus_conn = Module(new SysBusConnector(irq_client, plic, rom))
 
     bus_conn.io.external.ram <> io.ram
     bus_conn.io.external.serial <> io.serial
     bus_conn.io.external.irq_client <> irq_client.io.out
     bus_conn.io.external.plic <> plic.io.out
     bus_conn.io.external.flash <> io.flash
+    bus_conn.io.external.rom <> rom.io.out
 
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs <> io.devs

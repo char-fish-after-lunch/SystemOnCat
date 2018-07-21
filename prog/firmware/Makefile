@@ -5,7 +5,7 @@ OBJDUMP := $(ARCH_PREF)objdump
 OBJCOPY := $(ARCH_PREF)objcopy
 MARCH := rv32i
 CFLAGS :=
-START_ADR := 0xfffff000
+START_ADR := 0xffffffc0
 
 mastercat.bin: out.o
 	$(OBJCOPY) -O binary out.o mastercat.bin
