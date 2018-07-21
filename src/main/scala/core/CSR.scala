@@ -211,6 +211,7 @@ class CSRFileIO() extends Bundle{
     //VM Output
     val baseppn = Output(UInt(PPNLength.W))
     val asid = Output(UInt(ASIDLength.W))
+    val mode = Output(Bool())
     val priv = Output(UInt(2.W))
 }
 
@@ -251,6 +252,7 @@ class CSRFile() extends Module{
   //Read CSR
   io.asid := satp.asid(ASIDLength - 1,0)
   io.baseppn := satp.ppn(PPNLength - 1,0)
+  io.mode := satp.mode
   io.priv := prv
 
   io.read_csr_dat := 0.U(32.W)
