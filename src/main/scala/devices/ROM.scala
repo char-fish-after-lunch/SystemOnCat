@@ -49,8 +49,8 @@ class ROM(dataFile : String) extends SysBusSlave(new DumbBundle){
 
     val req = RegInit(Bool(), false.B)
     req := io.out.cyc_i & io.out.stb_i
-    val dat_req = RegInit(UInt(32.W), 0.U)
-    dat_req := io.out.dat_i
+    val adr_req = RegInit(UInt(32.W), 0.U)
+    adr_req := io.out.adr_i
     val sel_req = RegInit(UInt(4.W), 0.U)
     sel_req := io.out.sel_i
     
@@ -67,13 +67,12 @@ class ROM(dataFile : String) extends SysBusSlave(new DumbBundle){
         Wire(UInt(8.W)))
     for(i <- 0 until 4)
         ans(i) := 0.U
-
-    for(i <- 0 until (1 << adr_width)){
-        when((i >> 2).U === dat_req(adr_width - 1, 2)){
+    for(i <- 0 until (1 << (adr_width - 2))){
+        when(i.U === adr_req(adr_width - 1, 2)){
             // in this word
             for(j <- 0 until 4){
                 ans(j) := Mux(sel_req(j), 
-                    if((i | j) < len) data(i | j).U(8.W) else 0.U(8.W),
+                    if(((i << 2) | j) < len) data((i << 2) | j).U(8.W) else 0.U(8.W),
                     0.U(8.W))
             }
         }
