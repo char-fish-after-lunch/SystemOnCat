@@ -30,11 +30,11 @@ class CSRInfo extends Bundle {
 
 class MMUException extends Bundle {
     val iPF = Output(Bool())
-	val lPF = Output(Bool())
-	val sPF = Output(Bool())
+    val lPF = Output(Bool())
+    val sPF = Output(Bool())
 
-	//Page Fault Vaddr
-	val pf_vaddr = Output(UInt(MemoryConsts.VaLength.W))
+    //Page Fault PTE
+    val pf_vaddr = Output(UInt(MemoryConsts.VaLength.W))
 }
 
 class MMUWrapperIO extends Bundle {
