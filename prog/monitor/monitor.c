@@ -125,6 +125,7 @@ void trap(){
         // asynchronous interrupt
         switch((cause << 1) >> 1){
             case INT_MTIMER:
+                print("T\n");
                 *((unsigned*)ADR_TMEH) = 0;
                 *((unsigned*)ADR_TMEL) = 0;
                 if(in_user){
@@ -203,6 +204,7 @@ void trap(){
                         print("\n");
                         ret = true;
                 }
+
                 break;
 #endif
             default:
