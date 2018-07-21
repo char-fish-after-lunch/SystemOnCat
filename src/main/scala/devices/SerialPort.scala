@@ -6,3 +6,4 @@ import systemoncat.sysbus._
 class SerialPortSlaveReflector extends SysBusSlave(Flipped(new SysBusSlaveBundle)) {
     io.in <> io.out
 }
+

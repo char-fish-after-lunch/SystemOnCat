@@ -153,6 +153,15 @@ wire io_serial_stall_o;
 wire clk_13M;
 wire real_clk;
 
+wire io_plic_interface_serial_irq_r;
+wire io_plic_interface_serial_permission;
+wire io_plic_interface_keyboard_irq_r;
+wire io_plic_interface_keyboard_permission;
+wire io_plic_interface_net_irq_r;
+wire io_plic_interface_net_permission;
+wire io_plic_interface_reserved_irq_r;
+wire io_plic_interface_reserved_permission;
+
 
  
 reg [3:0] cnt;
@@ -198,7 +207,15 @@ SystemOnCat (
     .io_serial_sel_i(io_serial_sel_i),
     .io_serial_stb_i(io_serial_stb_i),
     .io_serial_we_i(io_serial_we_i),
-    .io_serial_stall_o(io_serial_stall_o)
+    .io_serial_stall_o(io_serial_stall_o),
+    .io_plic_interface_serial_irq_r(io_plic_interface_serial_irq_r),
+    .io_plic_interface_serial_permission(io_plic_interface_serial_permission),
+    .io_plic_interface_keyboard_irq_r(io_plic_interface_keyboard_irq_r),
+    .io_plic_interface_keyboard_permission(io_plic_interface_keyboard_irq_r),
+    .io_plic_interface_net_irq_r(io_plic_interface_net_irq_r),
+    .io_plic_interface_net_permission(io_plic_interface_net_permission),
+    .io_plic_interface_reserved_irq_r(io_plic_interface_reserved_irq_r),
+    .io_plic_interface_reserved_permission(io_plic_interface_reserved_permission)
 );
 
 //module RAMSlave(dat_i, dat_o, ack_o, adr_i, cyc_i,
@@ -247,8 +264,13 @@ SerialPortSlave(
     .uart_dat_i(ext_uart_rx),
     .uart_dat_o(ext_uart_tx),
     .clk_bus(real_clk),
-    .rst_bus(reset_btn)
+    .rst_bus(reset_btn),
+    .irq(io_plic_interface_serial_irq_r),
+    .irq_permitted(io_plic_interface_serial_permission)
 );
 
+assign io_plic_interface_keyboard_irq_r = 0;
+assign io_plic_interface_net_irq_r = 0;
+assign io_plic_interface_reserved_permission = 0;
 
 endmodule
