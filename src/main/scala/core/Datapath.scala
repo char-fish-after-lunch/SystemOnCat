@@ -110,15 +110,18 @@ class Datapath() extends Module {
     val csr_evec = Wire(UInt())
     val mem_interp = Wire(Bool()) // used to flush pipeline at the end of MEM
     val prev_mem_interp = RegInit(Bool(), false.B) 
+    val mem_has_expt = Wire(Bool()) // used to flush pipeline at the end of MEM
+    val prev_mem_has_expt = RegInit(Bool(), false.B) 
     // interrupt signal from csr keeps only for 1 cycle, therefore it has to be kept for future reference
 
     val csr_reg_epc = RegInit(UInt(), 0.U(32.W))
     val wb_reg_eret = RegInit(Bool(), false.B)
     val csr_reg_evec = RegInit(UInt(), 0.U(32.W))
+    val wb_reg_has_expt = RegInit(Bool(), false.B)
     val wb_reg_interp = RegInit(Bool(), false.B) // used to decide next pc at the beginning of WB
 
     val npc = Mux(imem_locked || dmem_locked, pc, // pc stall because of imem lock (avoid mem access FSM interruption)
-        Mux(wb_reg_interp, csr_reg_evec, // an interrupt/exception happened
+        Mux(wb_reg_interp || wb_reg_has_expt, csr_reg_evec, // an interrupt/exception happened
         Mux(wb_reg_eret, csr_reg_epc,  // eret executed
         Mux(ex_branch_mistaken, ex_branch_target, // branch prediction failed
         Mux(id_jump_expected, id_branch_target, // branch prediction
@@ -360,25 +363,36 @@ class Datapath() extends Module {
 
     val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
-    val cur_mem_interp = mem_has_exception || mem_has_interrupt
-    prev_mem_interp := Mux(mem_reg_replay, prev_mem_interp || cur_mem_interp, cur_mem_interp) 
-    mem_interp := cur_mem_interp || prev_mem_interp
+    val cur_mem_interp = mem_has_interrupt || mem_has_interrupt
+    val cur_mem_expt = mem_has_exception
+    prev_mem_interp := Mux(mem_reg_replay, prev_mem_interp || mem_has_interrupt, mem_has_interrupt) 
+    mem_interp := mem_has_interrupt || prev_mem_interp
+    prev_mem_has_expt := Mux(mem_reg_replay, prev_mem_interp || mem_has_exception, mem_has_exception) 
+    mem_has_expt := mem_has_exception || prev_mem_interp
     // tricky. collect all interrupts happened during memory stall.
 
     mem_eret := (mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET) && mem_functioning
-    csr_branch := mem_interp || mem_eret
+    csr_branch := mem_interp || mem_has_expt || mem_eret
     csr_epc := csr.io.epc
     csr_evec := csr.io.evec
 
     // ---------- WB -----------
     wb_replay := dmem_locked || imem_locked
 
-    when (!wb_replay && !mem_replay && mem_reg_valid) {
+    when (!wb_replay && !mem_replay) {
+        // tricky. Exception happens only when MEM is valid,
+        // but interrupt can happen at any time.
+        when (mem_reg_valid) {
+            wb_reg_has_expt := mem_has_expt
+        }
         wb_reg_interp := mem_interp
-        wb_reg_eret := mem_eret
+
         csr_reg_epc := csr_epc
-        csr_reg_evec := csr_evec
-        wb_reg_expt := mem_expt
+        csr_reg_evec := csr_evec        
+
+        when (mem_reg_valid) {
+            wb_reg_expt := mem_expt
+        }
     }
 
     when (!wb_replay && mem_functioning) {
@@ -386,6 +400,7 @@ class Datapath() extends Module {
         wb_reg_pc := mem_reg_pc
         wb_reg_inst := mem_reg_inst
         wb_reg_wdata := mem_reg_wdata
+        wb_reg_eret := mem_eret
         dmem_reg := io.dmem.rd_data
     }
 
@@ -413,7 +428,7 @@ class Datapath() extends Module {
         2.U -> Cat(io.dmem.rd_data(7, 0), io.dmem.wr_data(7, 0)),
         3.U -> Cat(id_reg_valid, ex_reg_valid, mem_reg_valid, id_reg_expt,
             ex_reg_expt, mem_reg_expt, wb_reg_expt, wb_reg_interp, 
-            cur_mem_interp, prev_mem_interp, mem_has_exception, io.irq_client.sft_irq_r,
+            cur_mem_interp, prev_mem_interp, mem_has_exception, io.core1_ext_irq_r,
             io.irq_client.tmr_irq_r, csr_branch, mem_reg_replay, mem_replay)
     ))
     io.debug_devs.dpy0 := pc(7, 0)
