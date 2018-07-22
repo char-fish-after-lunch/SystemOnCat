@@ -106,8 +106,8 @@ void print_help(){
     print("R          - List values of registers after last run.\n");
     print("E <x>      - Edit data starting at address x.\n");
     print("I <x>      - Edit instructions starting at address x.\n");
-    print("V <x> <y>  - View contents in [x, y].\n");
-    print("D <x> <y>  - Disassemble contents in [x, y].\n");
+    print("V <x> <y>  - View y words that follow address x.\n");
+    print("D <x> <y>  - Disassemble y instructions that follow address x.\n");
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
     print("T [<x>]    - Set time limit to x * 10 ms, "
         "or check the current time limit setting if x is not specified.\n");
@@ -125,7 +125,6 @@ void trap(){
         // asynchronous interrupt
         switch((cause << 1) >> 1){
             case INT_MTIMER:
-                print("T\n");
                 *((unsigned*)ADR_TMEH) = 0;
                 *((unsigned*)ADR_TMEL) = 0;
                 if(in_user){
