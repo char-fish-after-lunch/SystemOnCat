@@ -29,6 +29,7 @@ class SysBusExternal extends Bundle {
     val ram = Flipped(new SysBusSlaveBundle)
     val serial = Flipped(new SysBusSlaveBundle)
     val irq_client = Flipped(new SysBusSlaveBundle)
+    val plic = Flipped(new SysBusSlaveBundle)
 }
 
 class SysBusConnectorIO extends Bundle {
@@ -40,7 +41,7 @@ class SysBusConnectorIO extends Bundle {
     val imem_pending = Output(Bool())
 }
 
-class SysBusConnector(irq_client: Client) extends Module {
+class SysBusConnector(irq_client: Client, plic: PLIC) extends Module {
     val io = IO(new SysBusConnectorIO())
 
     // val bus = Module(new RAMSlaveReflector())
@@ -52,18 +53,21 @@ class SysBusConnector(irq_client: Client) extends Module {
     val bus_map = Seq(
         // default -> 0
         BitPat("b00000000000000001111000000000???") -> 1.U(2.W),
-        BitPat("b000000100000000001000000000?????") -> 2.U(2.W)
+        BitPat("b000000100000000001000000000?????") -> 2.U(2.W),
+        BitPat("b00000010000000000100000000100???") -> 3.U(2.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(
         ram_slave,
         serial_slave,
-        irq_client
+        irq_client,
+        plic
     )
 
     val mmu = Module(new MMUWrapper(bus_map, bus_slaves))
     mmu.io.external.ram <> ram_slave.io.out
     mmu.io.external.serial <> serial_slave.io.out
     mmu.io.external.irq_client <> io.external.irq_client
+    mmu.io.external.plic <> io.external.plic
     mmu.io.csr_info <> io.mmu_csr_info
     mmu.io.expt <> io.mmu_expt
 

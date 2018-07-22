@@ -4,6 +4,8 @@ import chisel3._
 import chisel3.util._
 import chisel3.Bits._
 
+import systemoncat.sysbus.SysBusSlave
+import systemoncat.devices.PLICInterface
 
 //object GateWayAddr{} implement by hardware can not be read/write by software
 
@@ -23,24 +25,13 @@ object InterruptID{
 	val ReservedID = 4.U(32.W)
 }
 
+class Serial_Bundle extends Bundle{
+
+}
+
 class PLICIO() extends Bundle{
-	//commands
-	val plic_en = Input(Bool())
-	val plic_rd_en = Input(Bool())
-	val plic_wr_en = Input(Bool())
-
-	//Selection Address
-	val addr = Input(UInt(32.W))
-
-	//Read Write Data
-	val read_plic_dat = Output(UInt(32.W))
-	val wb_plic_dat = Input(UInt(32.W))
-
 	//Interrupt Input
-	val serial_irq_r = Input(Bool())
-	val keyboard_irq_r = Input(Bool())
-	val net_irq_r = Input(Bool())
-	val reserved_irq_r = Input(Bool())
+	val external = Flipped(new PLICInterface)
 
 	//Interrupt Output
 	val core1_ext_irq_r = Output(UInt(32.W))
@@ -48,8 +39,9 @@ class PLICIO() extends Bundle{
 
 }
 
-class PLIC() extends Module{
-	val io = IO(new PLICIO)
+class PLIC() extends SysBusSlave(new PLICIO){
+	val plicio = Wire(new PLICIO)
+	io.in <> plicio
 
 	//GateWay Register
 	val serial_gate = Reg(Bool())
@@ -63,104 +55,103 @@ class PLIC() extends Module{
 	val net_ip = Reg(Bool())
 	val reserved_ip = Reg(Bool())
 
-	//Core1 Interrupt Register
+	//Core1 Interrupt Register(Read Only)
 	val Core1IR = Reg(UInt(32.W))
-
-	//Core2 Interrupt Register
+	//Core2 Interrupt Register(Read Only)
 	val Core2IR = Reg(UInt(32.W))
 
+	//Interrupt Permission
+	plicio.external.serial_permission := ~serial_gate
+	plicio.external.keyboard_permission := ~keyboard_gate
+	plicio.external.net_permission := ~net_gate
+	plicio.external.reserved_permission := false.B
+
 	//Interrupt Notification
-	when(io.serial_irq_r & ~serial_gate){ 
+	when(plicio.external.serial_irq_r & ~serial_gate){ 
+		printf("New Serial Request\n")
 		serial_ip := true.B
 		serial_gate := true.B
 	}
-	when(io.keyboard_irq_r & ~keyboard_gate){
+	when(plicio.external.keyboard_irq_r & ~keyboard_gate){
+		printf("New Keyboard Request\n")
 		keyboard_ip := true.B
 		keyboard_gate := true.B
 	}
-	when(io.net_irq_r & ~net_gate){
+	when(plicio.external.net_irq_r & ~net_gate){
+		printf("New Net Request\n")
 		net_ip := true.B
 		net_gate := true.B
 	}
 
-	io.core1_ext_irq_r := false.B
-	io.core2_ext_irq_r := false.B
+	plicio.core1_ext_irq_r := (Core1IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core1IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core1IR === InterruptID.NetID & net_ip === true.B)
+
+	plicio.core2_ext_irq_r := (Core2IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core2IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core2IR === InterruptID.NetID & net_ip === true.B)
+
 
 	when(keyboard_ip){
-		//Notify Core 1
+		printf("Keyboard interrupt, Notify Core 1\n")
 		Core1IR := InterruptID.KeyboardID
-		io.core1_ext_irq_r := true.B
 
-		//Notify Core 2
+		printf("Keyboard interrupt, Notify Core 2\n")
 		Core2IR := InterruptID.KeyboardID
-		io.core2_ext_irq_r := true.B
 
 	} .elsewhen(serial_ip){
-		//Notify Core 1
+		printf("Serial interrupt, Notify Core 1\n")
 		Core1IR := InterruptID.SerialPortID
-		io.core1_ext_irq_r := true.B
 
-		//Notify Core 2
+		printf("Serial interrupt, Notify Core 2\n")
 		Core2IR := InterruptID.SerialPortID
-		io.core2_ext_irq_r := true.B
 
 	} .elsewhen(net_ip){
-		//Notify Core 1
+		printf("Net interrupt, Notify Core 1\n")
 		Core1IR := InterruptID.NetID
-		io.core1_ext_irq_r := true.B
 
-		//Notify Core 2
+		printf("Net interrupt, Notify Core 2\n")
 		Core2IR := InterruptID.NetID
-		io.core2_ext_irq_r := true.B
 	}
 
-	//Register Read Logic(Interrupt Claim)
-	when(io.plic_en & io.plic_rd_en){
-		when(io.addr === InterruptRegisterAddr.Core1Addr){
-			io.read_plic_dat := Core1IR.asUInt()
-			io.core1_ext_irq_r := false.B
-			when( Core1IR === InterruptID.KeyboardID ){
-				keyboard_ip := false.B
-			} .elsewhen( Core1IR === InterruptID.SerialPortID ){
-				serial_ip := false.B
-			} .elsewhen( Core1IR === InterruptID.NetID ){
-				net_ip := false.B
+	val req = io.out.cyc_i && io.out.stb_i
+	val we = req & io.out.we_i
+
+	val state = RegInit(Bool(), false.B)
+	val ans = RegInit(UInt(32.W), 0.U)
+
+	state := req
+	ans := Mux(io.out.adr_i(2), Core2IR.asUInt(),Core1IR.asUInt())
+
+	io.out.ack_o := state
+	io.out.stall_o := false.B
+	io.out.err_o := false.B
+	io.out.rty_o := false.B
+	io.out.dat_o := ans
+
+	when(req){
+		when(!io.out.we_i){
+			val core = Mux(io.out.adr_i(2), Core2IR, Core1IR)
+			switch(core){
+				is(InterruptID.KeyboardID){
+					keyboard_ip := false.B
+				}
+				is(InterruptID.SerialPortID){
+					serial_ip := false.B
+				}
+				is(InterruptID.NetID){
+					net_ip := false.B
+				}
 			}
-		} .elsewhen(io.addr === InterruptRegisterAddr.Core2Addr){
-			io.read_plic_dat := Core2IR.asUInt()
-			io.core2_ext_irq_r := false.B
-			when( Core2IR === InterruptID.KeyboardID ){
-				keyboard_ip := false.B
-			} .elsewhen( Core2IR === InterruptID.SerialPortID ){
-				serial_ip := false.B
-			} .elsewhen( Core2IR === InterruptID.NetID ){
-				net_ip := false.B
+		}.otherwise{
+			switch(io.out.dat_i(2, 0)){
+				is(InterruptID.KeyboardID){
+					keyboard_gate := false.B
+				}
+				is(InterruptID.SerialPortID){
+					serial_gate := false.B
+				}
+				is(InterruptID.NetID){
+					net_gate := false.B
+				}
 			}
 		}
 	}
-
-	//Register Write Logic
-	when(io.plic_en & io.plic_wr_en){
-		when(io.addr === InterruptRegisterAddr.Core1Addr){
-			Core1IR := io.wb_plic_dat
-			when( Core1IR === InterruptID.KeyboardID ){
-				keyboard_gate := false.B
-			} .elsewhen( Core1IR === InterruptID.SerialPortID ){
-				serial_gate := false.B
-			} .elsewhen( Core1IR === InterruptID.NetID ){
-				net_gate := false.B
-			}
-		} .elsewhen(io.addr === InterruptRegisterAddr.Core2Addr){
-			Core2IR := io.wb_plic_dat
-			when( Core2IR === InterruptID.KeyboardID ){
-				keyboard_gate := false.B
-			} .elsewhen( Core2IR === InterruptID.SerialPortID ){
-				serial_gate := false.B
-			} .elsewhen( Core2IR === InterruptID.NetID ){
-				net_gate := false.B
-			}
-		}
-	}
-
 }
 

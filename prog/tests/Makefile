@@ -1,4 +1,4 @@
-mods= basic interrupt
+mods= basic interrupt mmu
 
 all: $(mods)
 

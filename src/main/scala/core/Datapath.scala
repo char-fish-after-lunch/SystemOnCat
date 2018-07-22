@@ -12,6 +12,7 @@ class DatapathIO() extends Bundle {
     val irq_client = Flipped(new ClientIrqIO)
     val mmu_csr_info = Flipped(new CSRInfo())
     val mmu_expt = Flipped(new MMUException())
+    val core1_ext_irq_r = Input(Bool())
 }
 
 class Datapath() extends Module {
@@ -324,7 +325,8 @@ class Datapath() extends Module {
 
     csr.io.csr_idx := wb_reg_inst(31,20)
 
-    csr.io.ext_irq_r := false.B
+    csr.io.ext_irq_r := io.core1_ext_irq_r // temporarily set to core1 as there would
+    // only be one core
     csr.io.sft_irq_r := io.irq_client.sft_irq_r
     csr.io.tmr_irq_r := io.irq_client.tmr_irq_r
 
