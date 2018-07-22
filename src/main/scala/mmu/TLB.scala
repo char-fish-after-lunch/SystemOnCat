@@ -62,7 +62,7 @@ class TLB extends Module{
 	when(TLBHit | io.passthrough){
 		printf("tlb hit\n")
 		io.paddr := MuxLookup(io.passthrough, 0.U(32.W), Seq(
-			false.B -> Cat(Fill(11, 0.U(1.W)), entries(lookup_index).ppn, page_offset),
+			false.B -> Cat(entries(lookup_index).ppn, page_offset),
 			true.B -> io.vaddr
 		))
 		io.valid := true.B

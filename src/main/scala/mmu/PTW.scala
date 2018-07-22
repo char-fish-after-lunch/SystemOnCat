@@ -31,7 +31,7 @@ class TLBPTWIO extends Bundle{
 }
 
 class PTWMEMIO extends Bundle{
-	val addr = Output(UInt(21.W)) //Target Address
+	val addr = Output(UInt(32.W)) //Target Address
 	val data = Input(UInt(32.W)) //Read Data
 	
 	val request = Output(Bool())
@@ -70,7 +70,7 @@ class PTW extends Module{
 
 	//mem access
 	io.mem.request := (state === s_request) | (state === s_wait1)
-	io.mem.addr := MuxLookup(state, 0.U(21.W), Seq(
+	io.mem.addr := MuxLookup(state, 0.U(32.W), Seq(
 		s_request -> (Cat(io.baseppn, vpn_1) << 2),
 		s_wait1 -> (Cat(temp_pte.ppn, vpn_2) << 2)
 	))
@@ -82,9 +82,9 @@ class PTW extends Module{
 	io.expt.sPF := (mm_cmd === MemoryConsts.Store) & page_fault
 	io.expt.iPF := (mm_cmd === MemoryConsts.PC) & page_fault
 	io.tlb.pf := page_fault
-	
 	when(page_fault){
 		printf("ptw: Page Fault!\n")
+
 	}
 
 	//finish logic
