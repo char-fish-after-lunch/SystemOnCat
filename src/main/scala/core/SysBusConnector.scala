@@ -55,7 +55,7 @@ class SysBusConnector(irq_client: Client, plic: PLIC, rom: ROM) extends Module {
         BitPat("b00000000000000001111000000000???") -> 1.U(3.W),
         BitPat("b000000100000000001000000000?????") -> 2.U(3.W),
         BitPat("b00000010000000000100000000100???") -> 3.U(3.W),
-        BitPat("b00000010000000000100000000101???") -> 4.U(3.W),
+        BitPat("b0000001000000000010000000011????") -> 4.U(3.W),
         BitPat("b11111111111111111111111111??????") -> 5.U(3.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(

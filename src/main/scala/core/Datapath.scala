@@ -80,7 +80,7 @@ class Datapath() extends Module {
     val csr_branch = Wire(Bool()) // when csr branch happens, all prev stages will be flushed
 
     // ---------- NPC ----------
-    val pc = RegInit((-4).S(32.W).asUInt) // initial pc
+    val pc = RegInit((0xffffffc0 - 4).S(32.W).asUInt) // initial pc
     pc_reg_valid := !csr_branch
     val ex_branch_mistaken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
