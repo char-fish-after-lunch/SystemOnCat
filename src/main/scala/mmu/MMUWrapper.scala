@@ -79,6 +79,8 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     io.external.serial <> translator.io.in(1)
     io.external.irq_client <> translator.io.in(2)
     io.external.plic <> translator.io.in(3)
+    io.external.flash <> translator.io.in(4)
+    io.external.rom <> translator.io.in(5)
 
     // translator.io.out
 

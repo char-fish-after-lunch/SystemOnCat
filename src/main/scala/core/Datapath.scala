@@ -341,9 +341,10 @@ class Datapath() extends Module {
     csr.io.saddrIv := mem_expt && (mem_cause === Cause.SAM(3, 0)) && mem_reg_valid
     
     // Trap Instruction
+    val mem_is_eret = mem_reg_inst === MRET || mem_reg_inst === URET || mem_reg_inst === SRET
     val wb_is_eret = wb_reg_inst === MRET || wb_reg_inst === URET || wb_reg_inst === SRET
-    csr.io.isEcall := wb_reg_inst === ECALL && wb_functioning
-    csr.io.isEbreak := wb_reg_inst === EBREAK && wb_functioning
+    csr.io.isEcall := mem_reg_inst === ECALL && mem_functioning
+    csr.io.isEbreak := mem_reg_inst === EBREAK && mem_functioning
     csr.io.isEret := wb_is_eret && wb_functioning
     
     // page Fault. TODO: page fault triggering should be carefully examined
