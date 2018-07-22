@@ -49,8 +49,8 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     val io = IO(new MMUWrapperIO)
     val ptw = Module(new PTW)
     val tlb = Module(new TLB)
-    //val translator = Module(new SysBusTranslator(map, slaves))
-    val translator = Module(new DummyTranslator)
+    val translator = Module(new SysBusTranslator(map, slaves))
+    //val translator = Module(new DummyTranslator)
 
     val phase_1 = RegInit(false.B)
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
