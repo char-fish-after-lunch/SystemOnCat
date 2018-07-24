@@ -5,24 +5,26 @@ nop
 lw x1, sa
 lw x2, pte1
 lw x3, pte2
+lw x4, pte3
 sw x2, addr1, x10
 sw x3, addr2, x10
+sw x4, addr3, x10
 csrw satp, x1 
 nop
 nop
-addi x10, x0, 1
-lw x11, vaddr
-addi x1, x0, 1
-addi x2, x0, 1
-addi x3, x0, 15
+nop
+nop
+nop
+la x1, hello
+addi x2, x0, 10
+addi x3, x0, 0
+li x10, 0xf000
 loop:
-add x1, x1, x2 
-add x2, x1, x2
-addi x10, x10, 1
-sw x1, 128(x11)
-sw x2, 132(x11)
-addi x11, x11, 8
-bne x10, x3, loop
+lbu x4, 0(x1)
+sw x4, 0(x10)
+addi x3, x3, 1
+addi x1, x1, 1
+bne x2, x3, loop
 nop
 nop
 nop
@@ -44,12 +46,11 @@ addr2:
 	.word 0x2000
 
 pte3:
-    .word 0x00000001
+    .word 0x00003c01
 addr3:
-    .word 0x200c
+    .word 0x203c
 
-
-data:
+hello:
 	.byte 104
     .byte 101
     .byte 108

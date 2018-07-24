@@ -1,4 +1,4 @@
-prog= pagetable
+prog= pagetable serial_pagetable
 
 ifndef MARCH
 MARCH:=rv32i
