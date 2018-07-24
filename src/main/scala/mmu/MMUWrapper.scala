@@ -50,14 +50,17 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     val ptw = Module(new PTW)
     val tlb = Module(new TLB)
     val translator = Module(new SysBusTranslator(map, slaves))
+    //val translator = Module(new DummyTranslator)
 
     val phase_1 = RegInit(false.B)
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
     val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
 
-    req_reg := Mux(phase_1 && !prev_cache_hit, req_reg, io.req) 
+    val page_fault = ptw.io.expt.iPF | ptw.io.expt.lPF | ptw.io.expt.sPF
+    
+    req_reg := Mux(phase_1 && !prev_cache_hit && !page_fault, req_reg, io.req) 
 
-    phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid, io.req.wen || io.req.ren)
+    phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid & !page_fault , io.req.wen || io.req.ren)
     // phase 1. vaddr -> paddr, 1 cycle if tlb hit, more cycles if tlb miss
     // phase 2. paddr -> data, 0 cycle if cache hit, 1 cycle if cache miss
 
@@ -74,7 +77,10 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     ptw.io.baseppn := io.csr_info.base_ppn
     ptw.io.priv := io.csr_info.priv
 
-    io.expt <> ptw.io.expt
+    val expt = Reg(new MMUException())
+    expt := ptw.io.expt
+    
+    io.expt := expt
     io.external.ram <> translator.io.in(0)
     io.external.serial <> translator.io.in(1)
     io.external.irq_client <> translator.io.in(2)
@@ -92,16 +98,20 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     translator.io.out.we_i := Mux(tlb.io.valid, req_reg.wen, false.B) // ptw never writes
 
     val paddr_reg_accessing = RegInit(Bool(), true.B)
+    val paddr_reg_pagefault = RegInit(Bool(), false.B)
     val ptw_reg_accessing = RegInit(Bool(), false.B)
 
     paddr_reg_accessing := tlb.io.valid // if tlb is valid in the prev cycle, then in the next cycle r/w is finished
     ptw_reg_accessing := ptw.io.mem.request // ptw asks for memory access
+    paddr_reg_pagefault := page_fault
+
     assert(!(paddr_reg_accessing && ptw_reg_accessing)) // only 1 in 2 cases is allowed
 
     ptw.io.mem.data := Mux(ptw_reg_accessing, translator.io.out.dat_o, 0.U(32.W))
     ptw.io.mem.valid := Mux(ptw_reg_accessing, !(translator.io.out.stall_o), false.B)
 
     io.res.data_rd := Mux(paddr_reg_accessing, translator.io.out.dat_o, 0.U(32.W))
-    io.res.locked := !prev_cache_hit && (translator.io.out.stall_o || phase_1 || !paddr_reg_accessing)
+    io.res.locked := !prev_cache_hit && (translator.io.out.stall_o || phase_1 || !(paddr_reg_accessing || paddr_reg_pagefault))
     io.res.err :=  Mux(paddr_reg_accessing, translator.io.out.err_o, false.B)
+
 }
