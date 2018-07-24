@@ -216,7 +216,7 @@ class Datapath() extends Module {
     ex_reg_expt_val := Mux(ex_replay, ex_reg_expt_val, 
         Mux(id_reg_expt && id_reg_valid, id_reg_expt_val, 0.U(4.W)))
 
-    ex_functioning := ex_reg_valid && (!ex_reg_expt) && (!ex_replay)
+    ex_functioning := ex_reg_valid && (!ex_reg_expt) && (!ex_replay) && (!csr_branch)
 
     // bypass logic
     val ex_reg_rs_bypass = Reg(Vec(id_raddr.size, Bool())) // if this reg can be bypassed
