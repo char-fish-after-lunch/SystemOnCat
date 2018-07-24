@@ -41,6 +41,9 @@ class Core() extends Module {
     bus_conn.io.external.flash <> io.flash
     bus_conn.io.external.rom <> rom.io.out
 
+    bus_conn.io.mmu_csr_info <> dpath.io.mmu_csr_info
+    bus_conn.io.mmu_expt <> dpath.io.mmu_expt
+
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs <> io.devs
     dpath.io.imem <> ifetch.io.core
@@ -48,6 +51,7 @@ class Core() extends Module {
     dpath.io.irq_client <> irq_client.io.in
 
     ifetch.io.bus <> bus_conn.io.imem
+    ifetch.io.pending <> bus_conn.io.imem_pending
     dmem.io.bus <> bus_conn.io.dmem
 
     // temporarily, no such devices

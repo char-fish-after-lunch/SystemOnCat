@@ -362,28 +362,24 @@ class CSRFile() extends Module{
   } .elsewhen(io.isEret) { //Eret Handler
     prv := mstatus.mpp
     mstatus.mie := mstatus.mpie
-  } .elsewhen(mip.meip | io.ext_irq_r){ //Extenral Interrupt Handler
-    when(mstatus.mie & mie.meie){
-      mepc := next_pc
-      mcause := Cat(Cause.Interrupt, Cause.MEI)
-      //when(~io.ext_irq_r) {mip.meip := false.B}
-      io.interrupt := true.B
-      prv := PRV.M
-      mstatus.mpp := prv
-      mstatus.mie := false.B
-      mstatus.mpie := mstatus.mie
-    }
-  } .elsewhen(mip.msip | io.sft_irq_r){ //Software Interrupt Handler
-    when(mstatus.mie & mie.msie){
-      mepc := next_pc
-      mcause := Cat(Cause.Interrupt, Cause.MSI)
-      //when(~io.tmr_irq_r) {mip.mtip := false.B}
-      io.interrupt := true.B
-      prv := PRV.M
-      mstatus.mpp := prv
-      mstatus.mie := false.B
-      mstatus.mpie := mstatus.mie
-    }
+  } .elsewhen((mip.meip | io.ext_irq_r) && mstatus.mie && mie.meie) { //Extenral Interrupt Handler
+    mepc := next_pc
+    mcause := Cat(Cause.Interrupt, Cause.MEI)
+    //when(~io.ext_irq_r) {mip.meip := false.B}
+    io.interrupt := true.B
+    prv := PRV.M
+    mstatus.mpp := prv
+    mstatus.mie := false.B
+    mstatus.mpie := mstatus.mie
+  } .elsewhen((mip.msip | io.sft_irq_r) && mstatus.mie && mie.msie) { //Software Interrupt Handler
+    mepc := next_pc
+    mcause := Cat(Cause.Interrupt, Cause.MSI)
+    //when(~io.tmr_irq_r) {mip.mtip := false.B}
+    io.interrupt := true.B
+    prv := PRV.M
+    mstatus.mpp := prv
+    mstatus.mie := false.B
+    mstatus.mpie := mstatus.mie
   } .elsewhen(mip.mtip | io.tmr_irq_r){ //Time Interrupt Handler
     when(mstatus.mie & mie.mtie){
       mepc := next_pc

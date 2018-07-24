@@ -17,7 +17,7 @@ class TLBIO extends Bundle{
 	val tlb_request = Input(Bool())
 	val tlb_flush = Input(Bool())
 
-	val paddr = Output(UInt(MemoryConsts.PaLength.W))
+	val paddr = Output(UInt(32.W))
 	val valid = Output(Bool())
 
 	//Page Fault Exception(Leave for PTW to solve)
@@ -61,9 +61,9 @@ class TLB extends Module{
 	
 	when(TLBHit | io.passthrough){
 		printf("tlb hit\n")
-		io.paddr := MuxLookup(io.passthrough, 0.U(21.W), Seq(
+		io.paddr := MuxLookup(io.passthrough, 0.U(32.W), Seq(
 			false.B -> Cat(entries(lookup_index).ppn, page_offset),
-			true.B -> io.vaddr(20,0)
+			true.B -> io.vaddr
 		))
 		io.valid := true.B
 	} .otherwise{
