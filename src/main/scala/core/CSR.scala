@@ -47,7 +47,7 @@ object Cause{
   val ECM = 11.U(31.W)//Environment Call of M-mode
   val IPF = 12.U(31.W)//Instruction page Fault
   val LPF = 13.U(31.W)//Load page Fault
-  val SPF = 14.U(31.W)//Save page Fault
+  val SPF = 15.U(31.W)//Save page Fault
 }
 class MStatus extends Bundle{
   val sd = Bool()
