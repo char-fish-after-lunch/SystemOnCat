@@ -14,7 +14,7 @@ bootedcat.bin: out.o
 	truncate --size=4096 bootedcat.bin
 
 out.o: bootasm.o bootedcat.o
-	$(LD) -nostdlib -N -e _start -Ttext $(START_ADR) bootasm.o bootedcat.o -o out.o
+	$(LD) -nostdlib -N -e _start -Ttext $(START_ADR) --no-relax bootasm.o bootedcat.o -o out.o
 
 bootedcat.o: bootedcat.c types.h soc.h
 	$(GCC) -c -march=$(MARCH) $(CFLAGS) -DVA_BASE=$(VA_BASE) -DPA_BOUND=$(PA_BOUND) -fno-builtin -o bootedcat.o bootedcat.c

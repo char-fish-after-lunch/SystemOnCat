@@ -6,6 +6,7 @@
 
 _start:
     nop
+    la gp, __global_pointer$
     li sp, ADR_USTACK_TOP
     # set up the stack
     j start
