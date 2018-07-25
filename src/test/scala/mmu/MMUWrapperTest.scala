@@ -20,7 +20,7 @@ object MMUTestConsts{
     val pte_1_addr = "h1000".U(32.W) //Cat(ptbase_ppn, pte_1_index) << 2
     val pte_1 = "h00000801".U(32.W)
     val pte_2_addr = "h2000".U(32.W) //Cat(pte_1(18,10), pte_2_index) << 2
-    val pte_2 = "h00000001".U(32.W)
+    val pte_2 = "h000000ff".U(32.W)
 
 //-------- for vaddr 3 -------------
     val pte_3 = "h00003c01".U(32.W)
@@ -116,6 +116,9 @@ class TMMUWrapper() extends Module {
     val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
 
     val page_fault = ptw.io.expt.iPF | ptw.io.expt.lPF | ptw.io.expt.sPF
+    when(page_fault){
+        printf("PAGE FAULT\n")
+    }
     printf("MMU: page_fault: %d\n",page_fault)
     printf("MMU: io.expt: %d\n", io.expt.lPF)
     req_reg := Mux(phase_1 && !prev_cache_hit && !page_fault, req_reg, io.req) 
