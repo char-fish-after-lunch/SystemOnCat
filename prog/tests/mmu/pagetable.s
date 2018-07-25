@@ -32,8 +32,6 @@ sw x4, 0(x10)
 addi x3, x3, 1
 addi x1, x1, 1
 bne x2, x3, loop
-end:
-j end
 nop
 nop
 nop
