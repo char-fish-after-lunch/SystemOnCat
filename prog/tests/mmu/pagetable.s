@@ -17,7 +17,7 @@ csrw satp, x1
 nop
 nop
 addi x10, x0, 1
-lw x11, vaddr
+li x11, 0x0
 addi x1, x0, 1
 addi x2, x0, 1
 addi x3, x0, 15
@@ -70,8 +70,3 @@ data:
     .byte 114
     .byte 108
     .byte 100
-
-
-3c72
-
-a9b1
