@@ -93,7 +93,8 @@ class Datapath() extends Module {
     // when sfence.vma/satp writing happens, flush all stages
 
     // ---------- NPC ----------
-    val pc = RegInit((0xffffffc0 - 4).S(32.W).asUInt) // initial pc
+    // val pc = RegInit((0xffffffc0 - 4).S(32.W).asUInt) // initial pc
+    val pc = RegInit((-4).S(32.W).asUInt) // initial pc
     val ex_branch_mistaken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
 
