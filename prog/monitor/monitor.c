@@ -106,8 +106,8 @@ void print_help(){
     print("R          - List values of registers after last run.\n");
     print("E <x>      - Edit data starting at address x.\n");
     print("I <x>      - Edit instructions starting at address x.\n");
-    print("V <x> <y>  - View contents in [x, y].\n");
-    print("D <x> <y>  - Disassemble contents in [x, y].\n");
+    print("V <x> <y>  - View y words that follow address x.\n");
+    print("D <x> <y>  - Disassemble y instructions that follow address x.\n");
 #if defined(WITH_CSR) && defined(WITH_INTERRUPT)
     print("T [<x>]    - Set time limit to x * 10 ms, "
         "or check the current time limit setting if x is not specified.\n");
@@ -203,6 +203,8 @@ void trap(){
                         print("\n");
                         ret = true;
                 }
+
+                write_csr(mepc, read_csr(mepc) + 4); // for ecall epc points to itself
                 break;
 #endif
             default:
@@ -243,7 +245,11 @@ void init(){
     *((unsigned*)ADR_CMPL) = 125000;
     *((unsigned*)ADR_TMEH) = 0;
     *((unsigned*)ADR_TMEL) = 0;
+#ifdef WITH_IRQ 
     set_csr(mie, (1 << INT_MTIMER) | (1 << INT_MIRQ));
+#else
+    set_csr(mie, (1 << INT_MTIMER));
+#endif
     in_user = false;
 
     time_lim = 100; // initial time limit 1000 ms

@@ -30,6 +30,8 @@ class SysBusExternal extends Bundle {
     val serial = Flipped(new SysBusSlaveBundle)
     val irq_client = Flipped(new SysBusSlaveBundle)
     val plic = Flipped(new SysBusSlaveBundle)
+    val flash = Flipped(new SysBusSlaveBundle)
+    val rom = Flipped(new SysBusSlaveBundle)
 }
 
 class SysBusConnectorIO extends Bundle {
@@ -41,26 +43,32 @@ class SysBusConnectorIO extends Bundle {
     val imem_pending = Output(Bool())
 }
 
-class SysBusConnector(irq_client: Client, plic: PLIC) extends Module {
+class SysBusConnector(irq_client: Client, plic: PLIC, rom: ROM) extends Module {
     val io = IO(new SysBusConnectorIO())
 
     // val bus = Module(new RAMSlaveReflector())
     val ram_slave = Module(new RAMSlaveReflector())
     val serial_slave = Module(new SerialPortSlaveReflector())
+    val flash_slave = Module(new FlashSlaveReflector())
     ram_slave.io.in <> io.external.ram
     serial_slave.io.in <> io.external.serial
+    flash_slave.io.in <> io.external.flash
 
     val bus_map = Seq(
         // default -> 0
-        BitPat("b00000000000000001111000000000???") -> 1.U(2.W),
-        BitPat("b000000100000000001000000000?????") -> 2.U(2.W),
-        BitPat("b00000010000000000100000000100???") -> 3.U(2.W)
+        BitPat("b00000000000000001111000000000???") -> 1.U(3.W),
+        BitPat("b000000100000000001000000000?????") -> 2.U(3.W),
+        BitPat("b00000010000000000100000000100???") -> 3.U(3.W),
+        BitPat("b0000001000000000010000000011????") -> 4.U(3.W),
+        BitPat("b11111111111111111111111111??????") -> 5.U(3.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(
         ram_slave,
         serial_slave,
         irq_client,
-        plic
+        plic,
+        flash_slave,
+        rom
     )
 
     val mmu = Module(new MMUWrapper(bus_map, bus_slaves))
@@ -68,6 +76,8 @@ class SysBusConnector(irq_client: Client, plic: PLIC) extends Module {
     mmu.io.external.serial <> serial_slave.io.out
     mmu.io.external.irq_client <> io.external.irq_client
     mmu.io.external.plic <> io.external.plic
+    mmu.io.external.flash <> flash_slave.io.out
+    mmu.io.external.rom <> io.external.rom
     mmu.io.csr_info <> io.mmu_csr_info
     mmu.io.expt <> io.mmu_expt
 

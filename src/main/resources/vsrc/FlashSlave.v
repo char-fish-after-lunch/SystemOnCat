@@ -11,7 +11,7 @@ input wire rst_bus;
 
 
 input wire [31:0] dat_i;
-output wire [31:0] dat_o;
+output reg [31:0] dat_o;
 output wire ack_o;
 input wire [31:0] adr_i;
 input wire cyc_i;
@@ -35,90 +35,56 @@ output wire flash_oe_n; // output enabled
 output wire flash_we_n; // write enabled
 output wire flash_byte_n; // 0 = 8x mode, 1 = 16x mode
 
-
-localparam STATE_IDLE = 3'b00;
-localparam STATE_ADR_WRITE = 3'b001;
-localparam STATE_DAT_READ = 3'b010;
-localparam STATE_DAT_WRITE = 3'b100;
-localparam STATE_ERR = 3'b101;
-
-reg [2:0] state;
 // sliding window
-reg read_phase, o_read_phase;
+reg [1:0] read_phase;
+reg [1:0] o_read_phase;
+reg req, we;
+reg [31:0] adr, dat;
 reg [7:0] dat_read;
-reg busy;
-wire stall, err;
-reg ack;
 
 initial begin
-    state <= STATE_IDLE;
     read_phase <= 0;
     o_read_phase <= 0;
-    busy <= 0;
 
-    ack <= 0;
+    req <= 0;
+    adr <= 0;
+    we <= 0;
+    dat <= 0;
 end
 
 always @(posedge clk_bus) begin
-    if(cyc_i && stb_i && !stall) begin
-        if(we_i) begin
-            if(adr_i[2] == 0) begin
-                // DAT_WRITE : not implemented
-                ack <= 0;
-                state <= STATE_ERR;
-            end else begin
-                // ADR_WRITE
-                ack <= 1;
-                flash_a <= dat_i[22:0];
-                state <= STATE_ADR_WRITE;
-            end
-        end else begin
-            ack <= 0;
-            if(adr_i[2] == 0) begin
-                // DAT_READ
-                state <= STATE_DAT_READ;
-            end else begin
-                // ADR_READ
-                // considered invalid
-                state <= STATE_ERR;
-            end
-        end
-    end else begin
-        case(state)
-            STATE_ADR_WRITE: begin
-                ack <= 0;
-                state <= STATE_IDLE;
-            end
-            STATE_DAT_READ: begin
-                if(ack) begin
-                    ack <= 0;
-                    state <= STATE_IDLE;
-                end else if(o_read_phase != read_phase) begin
-                    o_read_phase <= read_phase;
-                    ack <= 1;
-                end
-            end
-            STATE_DAT_WRITE: begin
-                // not implemented
-                state <= STATE_IDLE;
-            end
-            STATE_ERR: begin
-                state <= STATE_IDLE;
-            end
-        endcase
+    req <= cyc_i & stb_i;
+    adr <= adr_i;
+    we <= we_i;
+    dat <= dat_i;
+    if(req && adr[3:2] == 2'b01 && we) begin
+        flash_a <= dat[22:0];
+        o_read_phase <= read_phase + 2'b10;
     end
 end
 
+always @* begin
+    case(adr[3:2])
+        2'b00: begin
+            dat_o = {{24{1'b0}}, dat_read};
+        end
+        2'b01: begin
+            // write address
+            dat_o = {32{1'b0}};
+        end
+        default: begin
+            dat_o = {{31{1'b0}}, o_read_phase == read_phase};
+        end
+    endcase
+end
+
+
+
 always @(posedge flash_clk) begin
-    if(state == STATE_DAT_READ && !ack && o_read_phase == read_phase) begin
-        if(busy) begin
-            // finished
-            busy <= 1'b0;
+    if(o_read_phase != read_phase) begin
+        read_phase <= read_phase + 2'b01;
+        if(o_read_phase - read_phase == 1'b01) begin
             dat_read <= flash_d[7:0];
-            read_phase = ~read_phase;
-        end else begin
-            // start to read
-            busy <= 1'b1;
         end
     end
 end
@@ -128,17 +94,13 @@ assign flash_d = {16{1'bZ}}; // only receive data from device
 assign flash_vpen = 1'b0;
 assign flash_rp_n = 1'b1;
 
-// assign ack = (state == STATE_ADR_WRITE) | (state == STATE_DAT_READ && o_read_phase != read_phase);
-assign err = (state == STATE_ERR);
-assign ack_o = ack;
-assign err_o = err;
-assign rty_o = 1'b0;
-assign dat_o = {{24{1'b0}}, dat_read};
-assign stall = (state != STATE_IDLE) & ~ack & ~err;
-assign stall_o = stall;
+assign ack_o = req;
+assign err_o = 0;
+assign rty_o = 0;
+assign stall_o = 0;
 
-assign flash_ce_n = ~busy;
-assign flash_we_n = state != STATE_DAT_WRITE;
-assign flash_oe_n = state != STATE_DAT_READ;
+assign flash_ce_n = (o_read_phase - read_phase != 2'b01);
+assign flash_we_n = 1'b1;
+assign flash_oe_n = 1'b0;
 
 endmodule

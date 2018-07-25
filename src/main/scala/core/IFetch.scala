@@ -37,7 +37,7 @@ class IFetch extends Module {
 
     pc_reg_invalid := pc_invalid
     io.core.inst := Mux(pc_reg_invalid, NOP, io.bus.res.data_rd)
-    io.core.locked := Mux(pc_reg_invalid, true.B, io.bus.res.locked)
+    io.core.locked := Mux(pc_reg_invalid, false.B, io.bus.res.locked)
     io.core.pending := Mux(pc_reg_invalid, false.B, io.pending)
     io.core.pc_invalid_expt := pc_reg_invalid
     io.core.pc_err_expt := Mux(pc_reg_invalid, false.B, io.bus.res.err) // if pc addr is invalid, access err is ignored

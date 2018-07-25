@@ -150,6 +150,18 @@ wire io_serial_stb_i;
 wire io_serial_we_i;
 wire io_serial_stall_o;
 
+wire [31:0] io_flash_dat_i;
+wire [31:0] io_flash_dat_o;
+wire io_flash_ack_o;
+wire [31:0] io_flash_adr_i;
+wire io_flash_cyc_i;
+wire io_flash_err_o;
+wire io_flash_rty_o;
+wire [3:0] io_flash_sel_i;
+wire io_flash_stb_i;
+wire io_flash_we_i;
+wire io_flash_stall_o;
+
 wire clk_13M;
 wire real_clk;
 
@@ -162,8 +174,6 @@ wire io_plic_interface_net_permission;
 wire io_plic_interface_reserved_irq_r;
 wire io_plic_interface_reserved_permission;
 
-
- 
 reg [3:0] cnt;
 always @(posedge clk_50M) begin
     if (cnt == 3) begin
@@ -208,6 +218,17 @@ SystemOnCat (
     .io_serial_stb_i(io_serial_stb_i),
     .io_serial_we_i(io_serial_we_i),
     .io_serial_stall_o(io_serial_stall_o),
+    .io_flash_dat_i(io_flash_dat_i),
+    .io_flash_dat_o(io_flash_dat_o),
+    .io_flash_ack_o(io_flash_ack_o),
+    .io_flash_adr_i(io_flash_adr_i),
+    .io_flash_cyc_i(io_flash_cyc_i),
+    .io_flash_err_o(io_flash_err_o),
+    .io_flash_rty_o(io_flash_rty_o),
+    .io_flash_sel_i(io_flash_sel_i),
+    .io_flash_stb_i(io_flash_stb_i),
+    .io_flash_we_i(io_flash_we_i),
+    .io_flash_stall_o(io_flash_stall_o),
     .io_plic_interface_serial_irq_r(io_plic_interface_serial_irq_r),
     .io_plic_interface_serial_permission(io_plic_interface_serial_permission),
     .io_plic_interface_keyboard_irq_r(io_plic_interface_keyboard_irq_r),
@@ -267,6 +288,31 @@ SerialPortSlave(
     .rst_bus(reset_btn),
     .irq(io_plic_interface_serial_irq_r),
     .irq_permitted(io_plic_interface_serial_permission)
+);
+
+FlashSlave(
+    .dat_i(io_flash_dat_i),
+    .dat_o(io_flash_dat_o),
+    .ack_o(io_flash_ack_o),
+    .adr_i(io_flash_adr_i),
+    .cyc_i(io_flash_cyc_i),
+    .err_o(io_flash_err_o),
+    .rty_o(io_flash_rty_o),
+    .sel_i(io_flash_sel_i),
+    .stb_i(io_flash_stb_i),
+    .we_i(io_flash_we_i),
+    .stall_o(io_flash_stall_o),
+    .clk_bus(real_clk),
+    .rst_bus(reset_btn),
+    .flash_clk(clk_11M0592),
+    .flash_a(flash_a),
+    .flash_d(flash_d),
+    .flash_rp_n(flash_rp_n),
+    .flash_vpen(flash_vpen),
+    .flash_ce_n(flash_ce_n),
+    .flash_oe_n(flash_oe_n),
+    .flash_we_n(flash_we_n),
+    .flash_byte_n(flash_byte_n)
 );
 
 assign io_plic_interface_keyboard_irq_r = 0;
