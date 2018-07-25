@@ -159,8 +159,10 @@ class Datapath() extends Module {
     id_reg_expt := Mux(id_replay, id_reg_expt, pc_expt && pc_reg_valid)
     id_reg_cause := Mux(id_replay, id_reg_cause,
         Mux(io.imem.pc_invalid_expt, Cause.IAM(3, 0), 
-        Mux(io.imem.pc_err_expt, Cause.IAF(3, 0), 0.U(4.W))))
-    id_reg_expt_val := Mux(id_replay, id_reg_expt_val, Mux(pc_expt, pc, 0.U(32.W)))
+        Mux(io.imem.pc_err_expt, Cause.IAF(3, 0), 
+        Mux(io.mmu_expt.iPF, Cause.IPF(3, 0), 0.U(4.W)))))
+    id_reg_expt_val := Mux(id_replay, id_reg_expt_val, 
+        Mux(pc_expt, pc, 0.U(32.W)))
 
     id_expt := id_reg_expt || (!io.ctrl.sig.legal && pc_reg_valid)
     id_functioning := id_reg_valid && (!id_expt) && (!id_replay)
@@ -304,11 +306,15 @@ class Datapath() extends Module {
          io.dmem.rd_addr_invalid_expt || io.dmem.rd_access_err_expt
     // this is a wire, so that exception can be handled before next posclk
 
-    mem_cause := Mux(mem_reg_expt && mem_reg_valid, mem_reg_cause, 
-        Mux(io.dmem.wr_addr_invalid_expt, Cause.SAM(3, 0), 
-        Mux(io.dmem.rd_addr_invalid_expt, Cause.LAM(3, 0),
-        Mux(io.dmem.wr_access_err_expt, Cause.SAF(3, 0), 
-        Mux(io.dmem.rd_access_err_expt, Cause.LAF(3, 0), 0.U(4.W))))))
+    mem_cause := PriorityMux(Seq(
+            (mem_reg_expt && mem_reg_valid, mem_reg_cause), 
+            (io.dmem.wr_addr_invalid_expt, Cause.SAM(3, 0)),
+            (io.dmem.rd_addr_invalid_expt, Cause.LAM(3, 0)),
+            (io.dmem.wr_access_err_expt, Cause.SAF(3, 0)), 
+            (io.dmem.rd_access_err_expt, Cause.LAF(3, 0)),
+            (io.mmu_expt.lPF, Cause.LPF(3, 0)),
+            (io.mmu_expt.sPF, Cause.SPF(3, 0))
+        ))
 
     mem_expt_val := Mux(mem_reg_expt && mem_reg_valid, mem_reg_expt_val,
         Mux(mem_expt, alu.io.out, 0.U(32.U)))
@@ -355,9 +361,9 @@ class Datapath() extends Module {
     csr.io.isEret := wb_is_eret && wb_functioning
     
     // page Fault. TODO: page fault triggering should be carefully examined
-    csr.io.iPF := io.mmu_expt.iPF //Instruction Page Fault 
-    csr.io.lPF := io.mmu_expt.lPF //Load Page Fault
-    csr.io.sPF := io.mmu_expt.sPF //Store Page Fault
+    csr.io.iPF := mem_expt && (mem_cause === Cause.IPF(3, 0)) && mem_reg_valid //Instruction Page Fault 
+    csr.io.lPF := mem_expt && (mem_cause === Cause.LPF(3, 0)) && mem_reg_valid //Load Page Fault
+    csr.io.sPF := mem_expt && (mem_cause === Cause.SPF(3, 0)) && mem_reg_valid //Store Page Fault
 
     // write data
     csr.io.wb_csr_dat := wb_reg_wdata
