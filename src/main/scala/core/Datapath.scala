@@ -52,12 +52,15 @@ class Datapath() extends Module {
     val wb_waddr = wb_reg_inst(11,7)
 
     val pc_expt = Wire(Bool())
-    val id_reg_expt = RegInit(Bool(), false.B) // has exception
+    val id_reg_expt = RegInit(Bool(), false.B)
     val id_expt = Wire(Bool())
     val ex_reg_expt = RegInit(Bool(), false.B)
     val mem_reg_expt = RegInit(Bool(), false.B)
     val mem_expt = Wire(Bool())
     val wb_reg_expt = RegInit(Bool(), false.B)
+
+    val pc_reg_page_fault = RegInit(Bool(), false.B)
+    val pc_page_fault = Wire(Bool())
 
     val id_reg_cause = RegInit(UInt(), 0.U(4.W)) // exception cause
     val ex_reg_cause = RegInit(UInt(), 0.U(4.W))
@@ -106,6 +109,7 @@ class Datapath() extends Module {
     val pc_stall = id_exe_data_hazard || id_csr_data_hazard || imem_locked || dmem_locked || imem_pending
     pc_reg_valid := Mux(pc_stall, pc_reg_valid, true.B) && (!csr_branch) && (!tlb_flush_pipe)
 
+    val pc_reg_locked = RegInit(Bool(), false.B)
     val id_replay = Wire(Bool()) //happens when stalled
     val ex_replay = Wire(Bool())
     val mem_replay = Wire(Bool())
@@ -146,7 +150,14 @@ class Datapath() extends Module {
     // regs update
 
     io.ctrl.inst := inst_reg
-    pc_expt := io.imem.pc_invalid_expt || io.imem.pc_err_expt
+    pc_reg_locked := imem_locked
+    val pc_access_expt = io.imem.pc_invalid_expt || io.imem.pc_err_expt
+    val pc_cur_page_fault = io.mmu_expt.iPF
+    pc_reg_page_fault := Mux(pc_reg_locked, pc_reg_page_fault || pc_cur_page_fault, pc_cur_page_fault)
+    pc_page_fault := pc_reg_page_fault || pc_cur_page_fault
+    pc_expt := pc_access_expt || pc_page_fault
+    // if a page fault happens during inst fetching, then info has to be recorded
+    // and passed to next stages until collected by CSR in MEM.
     
     inst_reg := Mux(id_replay, inst_reg, io.imem.inst) 
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
@@ -156,11 +167,11 @@ class Datapath() extends Module {
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
     
-    id_reg_expt := Mux(id_replay, id_reg_expt, pc_expt && pc_reg_valid)
+    id_reg_expt := Mux(id_replay, id_reg_expt, pc_expt && pc_reg_valid && !pc_stall)
     id_reg_cause := Mux(id_replay, id_reg_cause,
         Mux(io.imem.pc_invalid_expt, Cause.IAM(3, 0), 
         Mux(io.imem.pc_err_expt, Cause.IAF(3, 0), 
-        Mux(io.mmu_expt.iPF, Cause.IPF(3, 0), 0.U(4.W)))))
+        Mux(pc_page_fault, Cause.IPF(3, 0), 0.U(4.W)))))
     id_reg_expt_val := Mux(id_replay, id_reg_expt_val, 
         Mux(pc_expt, pc, 0.U(32.W)))
 
@@ -303,7 +314,7 @@ class Datapath() extends Module {
     }
 
     mem_expt := (mem_reg_expt && mem_reg_valid) || io.dmem.wr_addr_invalid_expt || io.dmem.wr_access_err_expt ||
-         io.dmem.rd_addr_invalid_expt || io.dmem.rd_access_err_expt
+         io.dmem.rd_addr_invalid_expt || io.dmem.rd_access_err_expt || io.mmu_expt.lPF || io.mmu_expt.sPF
     // this is a wire, so that exception can be handled before next posclk
 
     mem_cause := PriorityMux(Seq(
@@ -315,6 +326,9 @@ class Datapath() extends Module {
             (io.mmu_expt.lPF, Cause.LPF(3, 0)),
             (io.mmu_expt.sPF, Cause.SPF(3, 0))
         ))
+    // Exception may happen at any time during memory accessing. (page fault)
+    // However, once an exception signal occurs, CSR immediately stores it and triggers another signal.
+    // So here we don't need to worry about being unable to deal with incoming exception/interrupt when pipeline is stuck.
 
     mem_expt_val := Mux(mem_reg_expt && mem_reg_valid, mem_reg_expt_val,
         Mux(mem_expt, alu.io.out, 0.U(32.U)))
@@ -334,7 +348,7 @@ class Datapath() extends Module {
     csr.io.inst := wb_reg_inst 
 
     csr.io.pc := last_valid_pc_from_wb
-    csr.io.addr := Mux(mem_expt && mem_reg_valid, mem_expt_val, io.mmu_expt.pf_vaddr)
+    csr.io.addr := Mux(io.mmu_expt.sPF || io.mmu_expt.lPF, io.mmu_expt.pf_vaddr, mem_expt_val)
 
     csr.io.csr_ena := wb_functioning && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
     csr.io.csr_rd_en := wb_functioning && (wb_ctrl_sigs.csr_cmd =/= CSR.N)
@@ -362,8 +376,9 @@ class Datapath() extends Module {
     
     // page Fault. TODO: page fault triggering should be carefully examined
     csr.io.iPF := mem_expt && (mem_cause === Cause.IPF(3, 0)) && mem_reg_valid //Instruction Page Fault 
-    csr.io.lPF := mem_expt && (mem_cause === Cause.LPF(3, 0)) && mem_reg_valid //Load Page Fault
-    csr.io.sPF := mem_expt && (mem_cause === Cause.SPF(3, 0)) && mem_reg_valid //Store Page Fault
+    csr.io.lPF := io.mmu_expt.lPF //Load Page Fault
+    csr.io.sPF := io.mmu_expt.sPF //Store Page Fault
+    // iPF comes from IF stage, lPF/sPF comes from MEM stage
 
     // write data
     csr.io.wb_csr_dat := wb_reg_wdata
