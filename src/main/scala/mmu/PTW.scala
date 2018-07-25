@@ -69,7 +69,9 @@ class PTW extends Module{
 	val page_fault = ~pte_1_valid | ~pte_2_valid 
 
 	//mem access
-	io.mem.request := (state === s_request) | (state === s_wait1)
+	val requesting_reg = RegInit(Bool(), false.B)
+
+	io.mem.request := ((state === s_request) | (state === s_wait1)) && requesting_reg
 	io.mem.addr := MuxLookup(state, 0.U(32.W), Seq(
 		s_request -> (Cat(io.baseppn, vpn_1) << 2),
 		s_wait1 -> (Cat(temp_pte.ppn, vpn_2) << 2)
@@ -98,6 +100,7 @@ class PTW extends Module{
 	when((state === s_ready) & io.tlb.refill_request){
 		printf("ptw ready state\n")
 		state := s_request
+		requesting_reg := true.B
 		page_offset := io.tlb.vaddr(11,0)
 		vpn_1 := io.tlb.vaddr(31,22)
 		vpn_2 := io.tlb.vaddr(21,12)
@@ -108,18 +111,23 @@ class PTW extends Module{
 		when(io.mem.valid === true.B) { 
 			state := s_wait1 
 			temp_pte := io.mem.data.asTypeOf(new PTE)
+			requesting_reg := false.B
 		}
 	}
 	when ((state === s_wait1)){
 		printf("ptw wait 1 state\n")
 		printf("ptw: first memory access get: %x\n", temp_pte.asUInt())
+
+		requesting_reg := true.B
 		when(page_fault){
 			state := s_ready
+			requesting_reg := false.B
 		}
 		.elsewhen(io.mem.valid === true.B) {
 			state := s_wait2
 			temp_pte := io.mem.data.asTypeOf(new PTE)
-		} 	
+			requesting_reg := false.B
+		}
 	}
 	when ((state === s_wait2)){
 		printf("ptw wait 2 state\n")
