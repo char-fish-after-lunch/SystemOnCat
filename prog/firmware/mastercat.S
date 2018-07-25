@@ -1,4 +1,4 @@
-#define ADR_FLASH 0b00000010000000000100000000110000
+#define ADR_FLASH 0b00000000011111111111111111100000
 .org 0x0
 .global _start
 # load 4KB data (starting from adr 0)

@@ -18,6 +18,7 @@ class DebugDevicesIO() extends Bundle {
 class CoreIO() extends Bundle {
     val devs = new DebugDevicesIO
     val ram = Flipped(new SysBusSlaveBundle)
+    val ram2 = Flipped(new SysBusSlaveBundle)
     val serial = Flipped(new SysBusSlaveBundle)
     val flash = Flipped(new SysBusSlaveBundle)
     val plic_interface = Flipped(new PLICInterface)
@@ -35,6 +36,7 @@ class Core() extends Module {
     val bus_conn = Module(new SysBusConnector(irq_client, plic, rom))
 
     bus_conn.io.external.ram <> io.ram
+    bus_conn.io.external.ram2 <> io.ram2
     bus_conn.io.external.serial <> io.serial
     bus_conn.io.external.irq_client <> irq_client.io.out
     bus_conn.io.external.plic <> plic.io.out
