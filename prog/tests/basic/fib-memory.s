@@ -4,7 +4,7 @@ _start:
 nop
 nop
 addi x10, x0, 1
-addi x11, x0, 0
+lw x11, vaddr
 addi x1, x0, 1
 addi x2, x0, 1
 addi x3, x0, 15
@@ -23,3 +23,5 @@ nop
 nop
 nop
 
+vaddr:
+    .word 0x3000
