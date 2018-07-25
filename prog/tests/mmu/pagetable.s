@@ -10,27 +10,29 @@ sw x3, addr2, x0
 csrw satp, x1 
 nop
 nop
-nop
-mv x1, x0
-mv x2, x0
-mv x3, x0
-la x1, data
-addi x2, x0, 10
-addi x3, x0, 0
-li x10, 0x100
+addi x10, x0, 1
+addi x11, x0, 0
+addi x1, x0, 1
+addi x2, x0, 1
+addi x3, x0, 15
 loop:
-lbu x4, 0(x1)
-sw x4, 0(x10)
-addi x3, x3, 1
-addi x1, x1, 1
-addi x10, x10, 4
-bne x2, x3, loop
+add x1, x1, x2 
+add x2, x1, x2
+addi x10, x10, 1
+sw x1, 128(x11)
+sw x2, 132(x11)
+addi x11, x11, 8
+bne x10, x3, loop
+end:
+j end
 nop
 nop
 nop
 nop
 nop
 nop
+
+
 sa:
 	.word 0x80000001
 pte1:
