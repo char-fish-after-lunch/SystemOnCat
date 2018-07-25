@@ -71,7 +71,7 @@ class DummyTranslator extends Module{
         printf("Memory: Ready to receive request\n")
         when(io.out.stb_i){
             printf("Memory: Receive request, Addr: %x\n", io.out.adr_i)
-            state := s_stall
+            state := s_memory
             addr := io.out.adr_i
         }
     }
@@ -80,8 +80,9 @@ class DummyTranslator extends Module{
         printf("Memory: Stalling\n")
     }
     when(state === s_memory){
-        printf("Memory: Access Address: %x\n",io.out.adr_i)
-        val temp_data = MuxLookup(io.out.adr_i, 0.U, Seq(
+        addr := io.out.adr_i
+        printf("Memory: Access Address: %x\n",addr)
+        val temp_data = MuxLookup(addr, 0.U, Seq(
             MMUTestConsts.pte_1_addr -> MMUTestConsts.pte_1,
             MMUTestConsts.pte_2_addr -> MMUTestConsts.pte_2,
             MMUTestConsts.pte_3_addr -> MMUTestConsts.pte_3,
@@ -180,7 +181,7 @@ class MMUWrapperTester() extends BasicTester{
 	
 
 	mmu.io.req.cmd := 0.U
-	mmu.io.req.ren := (cntr === 4.U) | (cntr === 11.U) | (cntr === 17.U)
+	mmu.io.req.ren := (cntr === 4.U) | (cntr === 15.U) | (cntr === 27.U)
 	mmu.io.req.data_wr := 0.U
 	mmu.io.req.addr := 0.U
 	mmu.io.req.wen := false.B
@@ -202,7 +203,7 @@ class MMUWrapperTester() extends BasicTester{
 		mmu.io.req.cmd := MemoryConsts.Load
 	}
 
-	when(cntr === 11.U){
+	when(cntr === 15.U){
 		printf("At time %d, We start to read %x\n", cntr, MMUTestConsts.vaddr2)
 		mmu.io.req.addr := MMUTestConsts.vaddr2
 		mmu.io.req.data_wr := 0.U
@@ -210,7 +211,7 @@ class MMUWrapperTester() extends BasicTester{
 		mmu.io.req.cmd := MemoryConsts.Load
 	}
 
-    when(cntr === 17.U){
+    when(cntr === 27.U){
         printf("At time %d, We start to read %x\n", cntr, MMUTestConsts.vaddr3)
         mmu.io.req.addr := MMUTestConsts.vaddr3
         mmu.io.req.data_wr := 0.U

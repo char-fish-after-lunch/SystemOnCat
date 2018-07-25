@@ -5,8 +5,12 @@ nop
 lw x1, sa
 lw x2, pte1
 lw x3, pte2
-sw x2, addr1, x10
-sw x3, addr2, x10
+lw x4, addr1
+lw x5, addr2
+
+sw x2, 0(x4)
+sw x3, 0(x5)
+
 csrw satp, x1 
 nop
 nop
@@ -33,7 +37,7 @@ nop
 nop
 
 vaddr:
-    .word 0x3000
+    .word 0x0000
 sa:
 	.word 0x80000001
 pte1:
