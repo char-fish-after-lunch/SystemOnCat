@@ -84,10 +84,16 @@ class Datapath() extends Module {
     val ex_reg_imme = RegInit(UInt(), 0.U(32.W)) // 32 bit immediate, sign extended if necessary
 
     val csr_branch = Wire(Bool()) // when csr branch happens, all prev stages will be flushed
+    val tlb_flush_pipe = Wire(Bool())
+    val tlb_flush_pipe_npc = Wire(Bits())
+    val tlb_reg_flush_pipe = RegInit(Bool(), false.B)
+    val tlb_reg_flush_pipe_npc = RegInit(Bits(), 0.U(32.W))
+    val tlb_pipe_branch = Wire(Bool())
+    val tlb_pipe_branch_target = Wire(Bits())
+    // when sfence.vma/satp writing happens, flush all stages
 
     // ---------- NPC ----------
     val pc = RegInit((0xffffffc0 - 4).S(32.W).asUInt) // initial pc
-    pc_reg_valid := !csr_branch
     val ex_branch_mistaken = Wire(Bool())
     val ex_branch_target = Wire(UInt())
 
@@ -97,7 +103,7 @@ class Datapath() extends Module {
     val id_exe_data_hazard = Wire(Bool())
     val id_csr_data_hazard = Wire(Bool())
     val pc_stall = id_exe_data_hazard || id_csr_data_hazard || imem_locked || dmem_locked || imem_pending
-    pc_reg_valid := Mux(pc_stall, pc_reg_valid, true.B) && (!csr_branch)
+    pc_reg_valid := Mux(pc_stall, pc_reg_valid, true.B) && (!csr_branch) && (!tlb_flush_pipe)
 
     val id_replay = Wire(Bool()) //happens when stalled
     val ex_replay = Wire(Bool())
@@ -123,9 +129,10 @@ class Datapath() extends Module {
     val npc = Mux(imem_locked || dmem_locked, pc, // pc stall because of imem lock (avoid mem access FSM interruption)
         Mux(wb_reg_interp || wb_reg_has_expt, csr_reg_evec, // an interrupt/exception happened
         Mux(wb_reg_eret && wb_functioning, csr_reg_epc,  // eret executed
+        Mux(tlb_pipe_branch, tlb_pipe_branch_target, // jump when tlb flushed
         Mux(ex_branch_mistaken, ex_branch_target, // branch prediction failed
         Mux(id_jump_expected, id_branch_target, // branch prediction
-        Mux(pc_stall, pc, pc + 4.U)))))) // pc stall
+        Mux(pc_stall, pc, pc + 4.U))))))) // pc stall
     pc := npc
     val inst_reg = RegInit(NOP) // instruction in IF
 
@@ -144,7 +151,7 @@ class Datapath() extends Module {
     id_reg_pc := Mux(id_replay, id_reg_pc, pc) 
     id_replay := id_exe_data_hazard || id_csr_data_hazard || dmem_locked || imem_locked
     id_reg_valid := ((!pc_stall && pc_reg_valid) || (id_replay && id_reg_valid)) &&
-         (!csr_branch) && (!id_jump_expected) && (!ex_branch_mistaken)
+         (!csr_branch) && (!id_jump_expected) && (!ex_branch_mistaken) && (!tlb_flush_pipe)
     // if pc stalled because of imem/dmem hazard, prev ID is duplicated and should be invalidated
     // but if pc stalled because of ID/EXE(or ID/CSR) hazard, then ID is also stalled and should be kept
     
@@ -206,7 +213,7 @@ class Datapath() extends Module {
         ex_reg_pc := id_reg_pc
     }
     ex_reg_valid := ((id_reg_valid && !id_replay) || (ex_replay && ex_reg_valid)) &&
-        (!ex_branch_mistaken) && (!csr_branch) // tricky
+        (!ex_branch_mistaken) && (!csr_branch) && (!tlb_flush_pipe)
 
     ex_reg_expt := Mux(ex_replay, ex_reg_expt, id_expt && id_reg_valid && (!id_replay))
     ex_reg_cause := Mux(ex_replay, ex_reg_cause,
@@ -216,7 +223,7 @@ class Datapath() extends Module {
     ex_reg_expt_val := Mux(ex_replay, ex_reg_expt_val, 
         Mux(id_reg_expt && id_reg_valid, id_reg_expt_val, 0.U(4.W)))
 
-    ex_functioning := ex_reg_valid && (!ex_reg_expt) && (!ex_replay) && (!csr_branch)
+    ex_functioning := ex_reg_valid && (!ex_reg_expt) && (!ex_replay) && (!csr_branch) && (!tlb_flush_pipe)
 
     // bypass logic
     val ex_reg_rs_bypass = Reg(Vec(id_raddr.size, Bool())) // if this reg can be bypassed
@@ -277,7 +284,7 @@ class Datapath() extends Module {
 
     mem_replay := dmem_locked || imem_locked
     mem_reg_replay := mem_replay
-    mem_reg_valid := ((ex_reg_valid && !ex_replay) || (mem_replay && mem_reg_valid)) && (!csr_branch)
+    mem_reg_valid := ((ex_reg_valid && !ex_replay) || (mem_replay && mem_reg_valid)) && (!csr_branch) && (!tlb_flush_pipe)
     io.dmem.wr_data := ex_rs(1)
     io.dmem.addr := alu.io.out
     io.dmem.wr_en := ex_functioning && ex_ctrl_sigs.mem && isWrite(ex_ctrl_sigs.mem_cmd)
@@ -354,12 +361,17 @@ class Datapath() extends Module {
     // write data
     csr.io.wb_csr_dat := wb_reg_wdata
 
+    val mem_is_sfence = mem_reg_valid && mem_reg_inst === SFENCE_VMA
+    val mem_will_write_satp = mem_reg_valid && mem_ctrl_sigs.csr_cmd =/= CSR.N && mem_reg_inst(31, 20) === CSRConsts.SATP
+    tlb_flush_pipe := (mem_is_sfence || mem_will_write_satp) && mem_functioning
+    tlb_flush_pipe_npc := mem_reg_pc + 4.U(32.W)
 
     io.mmu_csr_info.base_ppn := csr.io.baseppn
     io.mmu_csr_info.passthrough := !csr.io.mode
     io.mmu_csr_info.asid := csr.io.asid
     io.mmu_csr_info.priv := csr.io.priv
-    io.mmu_csr_info.tlb_flush := false.B // TODO: add support for SFENCE.VMA to support tlb_flush
+    io.mmu_csr_info.tlb_flush := tlb_flush_pipe
+    // TODO: check correctness of SFENCE.VMA & tlb flush
 
     val mem_has_interrupt = csr.io.interrupt
     val mem_has_exception = csr.io.expt
@@ -384,6 +396,8 @@ class Datapath() extends Module {
         // but interrupt can happen at any time.
         when (mem_reg_valid) {
             wb_reg_has_expt := mem_has_expt
+            tlb_reg_flush_pipe := tlb_flush_pipe
+            tlb_reg_flush_pipe_npc := tlb_flush_pipe_npc
         }
         wb_reg_interp := mem_interp
 
@@ -394,6 +408,9 @@ class Datapath() extends Module {
             wb_reg_expt := mem_expt
         }
     }
+
+    tlb_pipe_branch := tlb_reg_flush_pipe && wb_functioning
+    tlb_pipe_branch_target := tlb_reg_flush_pipe_npc
 
     when (!wb_replay && mem_functioning) {
         wb_ctrl_sigs := mem_ctrl_sigs

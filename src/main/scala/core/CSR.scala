@@ -5,6 +5,17 @@ import chisel3.util._
 import chisel3.Bits._
 import systemoncat.mmu.MemoryConsts._
 
+object CSRConsts {
+  def MSTATUS  = "h300".U(12.W)
+  def MIE      = "h304".U(12.W)
+  def MIP      = "h344".U(12.W)
+  def MTVEC    = "h305".U(12.W)
+  def MSCRATCH = "h340".U(12.W)
+  def MEPC     = "h341".U(12.W)
+  def MCAUSE   = "h342".U(12.W)
+  def SATP     = "h180".U(12.W)
+}
+
 object PRV
 {
   val SZ = 2.U(2.W)
@@ -258,14 +269,14 @@ class CSRFile() extends Module{
   io.read_csr_dat := 0.U(32.W)
   when(io.csr_ena & io.csr_rd_en){
     io.read_csr_dat := MuxLookup(io.csr_idx, 0.U(32.W), Seq(
-        "h300".U(12.W) -> mstatus.asUInt(),
-        "h304".U(12.W) -> mie.asUInt(),
-        "h344".U(12.W) -> mip.asUInt(),
-        "h305".U(12.W) -> mtvec.asUInt(),
-        "h340".U(12.W) -> mscratch,
-        "h341".U(12.W) -> mepc,
-        "h342".U(12.W) -> mcause,
-        "h180".U(12.W) -> satp.asUInt()
+        CSRConsts.MSTATUS  -> mstatus.asUInt(),
+        CSRConsts.MIE      -> mie.asUInt(),
+        CSRConsts.MIP      -> mip.asUInt(),
+        CSRConsts.MTVEC    -> mtvec.asUInt(),
+        CSRConsts.MSCRATCH -> mscratch,
+        CSRConsts.MEPC     -> mepc,
+        CSRConsts.MCAUSE   -> mcause,
+        CSRConsts.SATP     -> satp.asUInt()
         // "hb00".U(12.W) -> mcycle,
         // "hb80".U(12.W) -> mcycleh,
     ))
@@ -283,28 +294,28 @@ class CSRFile() extends Module{
 
   //Write CSR logic
   when(io.csr_ena & io.csr_wr_en & ~write_zero){
-    when(io.csr_idx === "h300".U(12.W)){
+    when(io.csr_idx === CSRConsts.MSTATUS){
       mstatus := wb_dat.asTypeOf(new MStatus())
     } 
-    .elsewhen(io.csr_idx === "h304".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MIE){
       mie := wb_dat.asTypeOf(new MIE())
     }
     //.elsewhen(io.csr_idx === "h344".U(12.W)){ MIP is read only
       //mip := wb_dat
     //}
-    .elsewhen(io.csr_idx === "h305".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MTVEC){
       mtvec := wb_dat.asTypeOf(new MTVEC())
     } 
-    .elsewhen(io.csr_idx === "h340".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MSCRATCH){
       mscratch := wb_dat
     } 
-    .elsewhen(io.csr_idx === "h341".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MEPC){
       mepc := wb_dat
     } 
-    .elsewhen(io.csr_idx === "h342".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MCAUSE){
       mcause := wb_dat
     } 
-    .elsewhen(io.csr_idx === "h180".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.SATP){
       satp := wb_dat.asTypeOf(new SATP())
     }
     // .elsewhen(io.csr_idx === "hb00".U(12.W)){
