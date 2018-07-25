@@ -362,7 +362,7 @@ class CSRFile() extends Module{
                 Mux(io.laddrIv, io.addr,
                 Mux(io.saddrIv, io.addr,
                 Mux(io.pcIv, io.pc,
-                Mux(io.iPF, io.pc,
+                Mux(io.iPF, io.addr,
                 Mux(io.lPF, io.addr,
                 Mux(io.sPF, io.addr, 0.U(32.W))))))))
 

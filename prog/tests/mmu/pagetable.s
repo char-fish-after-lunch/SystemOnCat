@@ -58,7 +58,7 @@ addr3:
     .word 0x200c
 
 
-data:
+hello:
 	.byte 104
     .byte 101
     .byte 108

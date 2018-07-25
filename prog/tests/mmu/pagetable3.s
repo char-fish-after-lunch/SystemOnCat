@@ -42,7 +42,7 @@ nop
 nop
 
 vaddr:
-    .word 0x0
+    .word 0x3000
 sa:
 	.word 0x80000001
 pte1:
@@ -55,7 +55,7 @@ addr2:
 	.word 0x2000
 
 pte3:
-    .word 0x00000001
+    .word 0x00000c01
 addr3:
     .word 0x200c
 
