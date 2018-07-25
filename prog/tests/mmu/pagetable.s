@@ -5,34 +5,33 @@ nop
 lw x1, sa
 lw x2, pte1
 lw x3, pte2
+lw x5, pte3
 
 la x4, addr1
 lw x4, 0(x4)
 sw x2, 0(x4)
+
 la x4, addr2
 lw x4, 0(x4)
 sw x3, 0(x4)
 
+la x4, addr3
+lw x4, 0(x4)
+sw x5, 0(x4)
+
 csrw satp, x1 
 nop
 nop
-addi x10, x0, 1
-li x11, 0x0
-addi x1, x0, 1
-addi x2, x0, 1
-addi x3, x0, 15
+la x1, hello
+addi x2, x0, 10
+addi x3, x0, 0
+li x10, 0xf000
 loop:
-add x1, x1, x2 
-add x2, x1, x2
-addi x10, x10, 1
-li x12, 0x200
-add x12, x11, x12
-sw x1, 0(x12)
-sw x2, 4(x12)
-addi x11, x11, 8
-bne x10, x3, loop
-end:
-j end
+lbu x4, 0(x1)
+sw x4, 0(x10)
+addi x3, x3, 1
+addi x1, x1, 1
+bne x2, x3, loop
 nop
 nop
 nop
