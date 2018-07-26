@@ -22,8 +22,14 @@ sw x11, 0(x10)
 csrw satp, x1
 
 li x4, 97
+li x5, 0x200
 li x6, 108
-li x5, 0x4000
+li x19, 0x4000
+
+la x20, loop
+add x20, x19, x20
+jr x20 # should trigger page fault
+
 loop:
 sw x4, 0(x5)
 nop
@@ -34,7 +40,7 @@ nop
 beq x4, x6, inner_loop
 addi x5, x5, 4
 nop
-j loop # after execution, 0x5000 in RAM should have been overwritten
+jr x20 # after execution, 0x200 in RAM should have been overwritten
 nop
 
 pf_handler:
@@ -43,7 +49,7 @@ li x10, 0x2010
 sw x12, 8(x10)
 csrr x12, mcause
 sw x12, 16(x10)
-li x11, 0x00001401 # page 1 -> page 4 -> page 5 (virtual page 4 mapped to physical page 5)
+li x11, 0x00000001 # page 1 -> page 4 -> page 0 (virtual page 4 mapped to physical page 0)
 sw x11, 0(x10)
 sfence.vma
 mret

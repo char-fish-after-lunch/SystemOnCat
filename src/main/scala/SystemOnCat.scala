@@ -9,6 +9,7 @@ class SystemOnCat extends Module {
     val core = Module(new Core())
     core.io.devs <> io.devs
     core.io.ram <> io.ram
+    core.io.ram2 <> io.ram2
     core.io.serial <> io.serial
     core.io.plic_interface <> io.plic_interface
     core.io.flash <> io.flash

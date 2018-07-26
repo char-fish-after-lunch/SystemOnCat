@@ -13,6 +13,7 @@ object CSRConsts {
   def MSCRATCH = "h340".U(12.W)
   def MEPC     = "h341".U(12.W)
   def MCAUSE   = "h342".U(12.W)
+  def MTVAL    = "h343".U(12.W)
   def SATP     = "h180".U(12.W)
 }
 
@@ -273,6 +274,7 @@ class CSRFile() extends Module{
         CSRConsts.MIE      -> mie.asUInt(),
         CSRConsts.MIP      -> mip.asUInt(),
         CSRConsts.MTVEC    -> mtvec.asUInt(),
+        CSRConsts.MTVAL    -> mtval.asUInt(),
         CSRConsts.MSCRATCH -> mscratch,
         CSRConsts.MEPC     -> mepc,
         CSRConsts.MCAUSE   -> mcause,
