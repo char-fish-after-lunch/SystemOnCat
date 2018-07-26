@@ -5,16 +5,17 @@ nop
 lw x1, sa
 lw x2, pte1
 lw x3, pte2
-sw x2, addr1, x0
-sw x3, addr2, x0
+lw x4, pte3
+sw x2, addr1, x10
+sw x3, addr2, x10
+sw x4, addr3, x10
 csrw satp, x1 
 nop
 nop
 nop
-mv x1, x0
-mv x2, x0
-mv x3, x0
-addi x1, x0, 0x48
+nop
+nop
+la x1, hello
 addi x2, x0, 10
 addi x3, x0, 0
 li x10, 0xf000
@@ -30,6 +31,9 @@ nop
 nop
 nop
 nop
+
+vaddr:
+    .word 0x3000
 sa:
 	.word 0x80000001
 pte1:
@@ -40,7 +44,13 @@ addr1:
 	.word 0x1000
 addr2:
 	.word 0x2000
-data:
+
+pte3:
+    .word 0x00003c01
+addr3:
+    .word 0x203c
+
+hello:
 	.byte 104
     .byte 101
     .byte 108
@@ -51,3 +61,4 @@ data:
     .byte 114
     .byte 108
     .byte 100
+    

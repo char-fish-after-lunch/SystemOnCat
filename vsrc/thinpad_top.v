@@ -138,6 +138,19 @@ wire io_ram_stb_i;
 wire io_ram_we_i;
 wire io_ram_stall_o;
 
+
+wire [31:0] io_ram2_dat_i;
+wire [31:0] io_ram2_dat_o;
+wire io_ram2_ack_o;
+wire [31:0] io_ram2_adr_i;
+wire io_ram2_cyc_i;
+wire io_ram2_err_o;
+wire io_ram2_rty_o;
+wire [3:0] io_ram2_sel_i;
+wire io_ram2_stb_i;
+wire io_ram2_we_i;
+wire io_ram2_stall_o;
+
 wire [31:0] io_serial_dat_i;
 wire [31:0] io_serial_dat_o;
 wire io_serial_ack_o;
@@ -207,6 +220,17 @@ SystemOnCat (
     .io_ram_stb_i(io_ram_stb_i),
     .io_ram_we_i(io_ram_we_i),
     .io_ram_stall_o(io_ram_stall_o),
+    .io_ram2_dat_i(io_ram2_dat_i),
+    .io_ram2_dat_o(io_ram2_dat_o),
+    .io_ram2_ack_o(io_ram2_ack_o),
+    .io_ram2_adr_i(io_ram2_adr_i),
+    .io_ram2_cyc_i(io_ram2_cyc_i),
+    .io_ram2_err_o(io_ram2_err_o),
+    .io_ram2_rty_o(io_ram2_rty_o),
+    .io_ram2_sel_i(io_ram2_sel_i),
+    .io_ram2_stb_i(io_ram2_stb_i),
+    .io_ram2_we_i(io_ram2_we_i),
+    .io_ram2_stall_o(io_ram2_stall_o),
     .io_serial_dat_i(io_serial_dat_i),
     .io_serial_dat_o(io_serial_dat_o),
     .io_serial_ack_o(io_serial_ack_o),
@@ -265,6 +289,29 @@ RAMSlave(
     .clk_bus(real_clk),
     .rst_bus(reset_btn)
 );
+
+RAMSlave(
+    .dat_i(io_ram2_dat_i),
+    .dat_o(io_ram2_dat_o),
+    .ack_o(io_ram2_ack_o),
+    .adr_i(io_ram2_adr_i),
+    .cyc_i(io_ram2_cyc_i),
+    .err_o(io_ram2_err_o),
+    .rty_o(io_ram2_rty_o),
+    .sel_i(io_ram2_sel_i),
+    .stb_i(io_ram2_stb_i),
+    .we_i(io_ram2_we_i),
+    .stall_o(io_ram2_stall_o),
+    .sram_adr(ext_ram_addr),
+    .sram_dat(ext_ram_data),
+    .sram_ce(ext_ram_ce_n),
+    .sram_oe(ext_ram_oe_n),
+    .sram_we(ext_ram_we_n),
+    .sram_be(ext_ram_be_n),
+    .clk_bus(real_clk),
+    .rst_bus(reset_btn)
+);
+
 
 SerialPortSlave(
     .dat_i(io_serial_dat_i),

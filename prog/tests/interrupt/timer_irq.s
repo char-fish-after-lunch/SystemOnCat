@@ -22,16 +22,12 @@ csrw mip, x6
 mret
 
 timer_init:
-li x3, 0x2000000
+li x3, 0x30
 sw x3, 0(x20)
 li x3, 0
 sw x3, 8(x20)
-
 loop:
-nop
-nop
+lw x22, 0(x5)
 j loop
-nop
-nop
-nop
+li x5, 64
 nop

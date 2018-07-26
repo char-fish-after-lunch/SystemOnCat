@@ -6,27 +6,40 @@ import chisel3.testers._
 import systemoncat.sysbus._
 
 object MMUTestConsts{
-    val ptbase_ppn = "h10".U(9.W)
+    val ptbase_ppn = "h1".U(20.W)
     
-    val vaddr1 = "h10000000".U(32.W)
-    val vaddr2 = "h10000004".U(32.W)
-    val paddr1 = "h1c9000".U(21.W)
-    val paddr2 = "h1c9004".U(21.W)
+    val vaddr1 = "h0".U(32.W)
+    val vaddr2 = "h4".U(32.W)
+    val vaddr3 = "hf000".U(32.W)
+    val pf_vaddr = "h30000000".U(32.W)
 
-    val pte_1_index = vaddr1(31,22)
-    val pte_1_addr = "h10100".U(21.W) //Cat(ptbase_ppn, pte_1_index) << 2
-    val pte_1 = "h8001".U(31.W)
-    
-    val pte_2_index = vaddr1(21,12)
-    val pte_2_addr = "h20000".U(21.W) //Cat(pte_1(18,10), pte_2_index) << 2
-    val pte_2 = "h72401".U(31.W)
+    val paddr1 = "h0".U(32.W)
+    val paddr2 = "h4".U(32.W)
+    val paddr3 = "hf000".U(32.W)
+//-------- for vaddr 1,2 --------
+    val pte_1_addr = "h1000".U(32.W) //Cat(ptbase_ppn, pte_1_index) << 2
+    val pte_1 = "h00000801".U(32.W)
+    val pte_2_addr = "h2000".U(32.W) //Cat(pte_1(18,10), pte_2_index) << 2
+    val pte_2 = "h00000001".U(32.W)
+
+//-------- for vaddr 3 -------------
+    val pte_3 = "h00003c01".U(32.W)
+    val pte_3_addr = "h203c".U(32.W)
+
+//------- for page fault ---------
+    val pf_pte1_addr = "h10300".U(32.W)
+    val pf_pte1 = "hc001".U(32.W)
+    val pf_pte2_addr = "h30000".U(32.W)
+    val pf_pte2 = "h73400".U(32.W)
 
     val data1 = "h1c9f048e".U(32.W)
     val data2 = "hf673cdea".U(32.W)
+    val data3 = "hfffffff3".U(32.W)
+
 }
 
 class DummyTranslatorIO extends Bundle{
-    val adr_i = Input(UInt(21.W))
+    val adr_i = Input(UInt(32.W))
     val dat_i = Input(UInt(32.W))
     val sel_i = Input(UInt(4.W))
     val stb_i = Input(Bool())
@@ -47,7 +60,7 @@ class DummyTranslator extends Module{
     val s_ready :: s_memory :: s_stall :: Nil = Enum(UInt(),3)
     val state = Reg(init = s_memory)
 
-    val addr = Reg(UInt(21.W))
+    val addr = Reg(UInt(32.W))
     val data = Reg(UInt(32.W))
 
     io.out.dat_o := data
@@ -58,7 +71,8 @@ class DummyTranslator extends Module{
         printf("Memory: Ready to receive request\n")
         when(io.out.stb_i){
             printf("Memory: Receive request, Addr: %x\n", io.out.adr_i)
-            state := s_stall
+
+            state := s_memory
             addr := io.out.adr_i
         }
     }
@@ -67,13 +81,17 @@ class DummyTranslator extends Module{
         printf("Memory: Stalling\n")
     }
     when(state === s_memory){
-        
-        val temp_data = MuxLookup(io.out.adr_i, 0.U, Seq(
+        addr := io.out.adr_i
+        printf("Memory: Access Address: %x\n",addr)
+        val temp_data = MuxLookup(addr, 0.U, Seq(
             MMUTestConsts.pte_1_addr -> MMUTestConsts.pte_1,
             MMUTestConsts.pte_2_addr -> MMUTestConsts.pte_2,
+            MMUTestConsts.pte_3_addr -> MMUTestConsts.pte_3,
             MMUTestConsts.paddr1 -> MMUTestConsts.data1,
-            MMUTestConsts.paddr2 -> MMUTestConsts.data2
-        	
+            MMUTestConsts.paddr2 -> MMUTestConsts.data2,
+        	MMUTestConsts.paddr3 -> MMUTestConsts.data3,
+            MMUTestConsts.pf_pte1_addr -> MMUTestConsts.pf_pte1,
+            MMUTestConsts.pf_pte2_addr -> MMUTestConsts.pf_pte2
         ))
         printf("Memory: Get data: %x\n", temp_data)
         io.out.dat_o := temp_data
@@ -98,9 +116,12 @@ class TMMUWrapper() extends Module {
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
     val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
 
-    req_reg := Mux(phase_1 && !prev_cache_hit, req_reg, io.req) 
+    val page_fault = ptw.io.expt.iPF | ptw.io.expt.lPF | ptw.io.expt.sPF
+    printf("MMU: page_fault: %d\n",page_fault)
+    printf("MMU: io.expt: %d\n", io.expt.lPF)
+    req_reg := Mux(phase_1 && !prev_cache_hit && !page_fault, req_reg, io.req) 
 
-    phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid, io.req.wen || io.req.ren)
+    phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid & !page_fault , io.req.wen || io.req.ren)
     // phase 1. vaddr -> paddr, 1 cycle if tlb hit, more cycles if tlb miss
     // phase 2. paddr -> data, 0 cycle if cache hit, 1 cycle if cache miss
 
@@ -117,11 +138,11 @@ class TMMUWrapper() extends Module {
     ptw.io.baseppn := io.csr_info.base_ppn
     ptw.io.priv := io.csr_info.priv
 
-    io.expt <> ptw.io.expt
+    val expt = Reg(new MMUException())
+    expt := ptw.io.expt
+    
+    io.expt := expt
 
-    // io.external.ram <> translator.io.in(0)
-    // io.external.serial <> translator.io.in(1)
-    // io.external.irq_client <> translator.io.in(2)
     // translator.io.out
 
     translator.io.out.adr_i := Mux(tlb.io.valid, tlb.io.paddr, ptw.io.mem.addr)
@@ -131,29 +152,33 @@ class TMMUWrapper() extends Module {
     translator.io.out.cyc_i := true.B
     translator.io.out.we_i := Mux(tlb.io.valid, req_reg.wen, false.B) // ptw never writes
 
-    val paddr_reg_accessing = RegInit(Bool(), false.B)
+    val paddr_reg_accessing = RegInit(Bool(), true.B)
+    val paddr_reg_pagefault = RegInit(Bool(), false.B)
     val ptw_reg_accessing = RegInit(Bool(), false.B)
 
     paddr_reg_accessing := tlb.io.valid // if tlb is valid in the prev cycle, then in the next cycle r/w is finished
     ptw_reg_accessing := ptw.io.mem.request // ptw asks for memory access
+    paddr_reg_pagefault := page_fault
     assert(!(paddr_reg_accessing && ptw_reg_accessing)) // only 1 in 2 cases is allowed
 
     ptw.io.mem.data := Mux(ptw_reg_accessing, translator.io.out.dat_o, 0.U(32.W))
     ptw.io.mem.valid := Mux(ptw_reg_accessing, !(translator.io.out.stall_o), false.B)
 
     io.res.data_rd := Mux(paddr_reg_accessing, translator.io.out.dat_o, 0.U(32.W))
-    io.res.locked := !prev_cache_hit && (translator.io.out.stall_o || phase_1 || !paddr_reg_accessing)
+    io.res.locked := !prev_cache_hit && (translator.io.out.stall_o || phase_1 || !(paddr_reg_accessing || paddr_reg_pagefault))
     io.res.err :=  Mux(paddr_reg_accessing, translator.io.out.err_o, false.B)
+
+    printf("MMU: state: %d\n", phase_1)
 }
 
 class MMUWrapperTester() extends BasicTester{
 	val mmu = Module(new TMMUWrapper())
 
-	val (cntr, done) = Counter(true.B, 40)
+	val (cntr, done) = Counter(true.B, 50)
 	
 
 	mmu.io.req.cmd := 0.U
-	mmu.io.req.ren := false.B
+	mmu.io.req.ren := (cntr === 4.U) | (cntr === 15.U) | (cntr === 27.U)
 	mmu.io.req.data_wr := 0.U
 	mmu.io.req.addr := 0.U
 	mmu.io.req.wen := false.B
@@ -167,25 +192,30 @@ class MMUWrapperTester() extends BasicTester{
 
 	printf("At time: %d, mmu stall state: %d, mmu data: %x\n",cntr, mmu.io.res.locked, mmu.io.res.data_rd)
 
-	when(cntr === 1.U){
+	when(cntr === 4.U){
 		printf("At time %d, We start to read %x\n",cntr, MMUTestConsts.vaddr1)
 		mmu.io.req.addr := MMUTestConsts.vaddr1
-		mmu.io.req.data_wr := 0.U
 		mmu.io.req.sel := "b1111".U(4.W)
 		mmu.io.req.wen := false.B
-		mmu.io.req.ren := true.B
 		mmu.io.req.cmd := MemoryConsts.Load
 	}
 
-	when(cntr === 9.U){
+	when(cntr === 15.U){
 		printf("At time %d, We start to read %x\n", cntr, MMUTestConsts.vaddr2)
 		mmu.io.req.addr := MMUTestConsts.vaddr2
-		mmu.io.req.data_wr := 0.U
 		mmu.io.req.sel := "b1111".U(4.W)
 		mmu.io.req.wen := false.B
-		mmu.io.req.ren := true.B
 		mmu.io.req.cmd := MemoryConsts.Load
 	}
+
+
+    when(cntr === 27.U){
+        printf("At time %d, We start to read %x\n", cntr, MMUTestConsts.vaddr3)
+        mmu.io.req.addr := MMUTestConsts.vaddr3
+        mmu.io.req.data_wr := 0.U
+        mmu.io.req.sel := "b1111".U(4.W)
+        mmu.io.req.cmd := MemoryConsts.Load
+    }
 
 
 	when(done) { 
@@ -202,6 +232,6 @@ class MMUWrapperTester() extends BasicTester{
 class MMUWrapperTests extends org.scalatest.FlatSpec {
     "MMUWrapperTests" should "pass" in {
         assert(TesterDriver execute (() => new MMUWrapperTester()))
-        //assert(1 === 2)
+       // assert(1 === 2)
     }
 }

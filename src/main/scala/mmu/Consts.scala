@@ -16,12 +16,15 @@ object MemoryConsts{
 	val OffsetLength = 12
 
 	//Physical Address Structure
-	// |----PPN(9)----|--offset(12)--|
-	val PPNLength = 9
+	// |----PPN(20)----|--offset(12)--|
+	//val PPNLength = 9
+	val PPNLength = 20
+
 
 	//TLB Entry Structure
 	// |----ASID(5)----|----VPN(31:16)----|--index(VPN(16:12))--|----PPN(9)----|
 	val ASIDLength = 5
+
 	val TLBIndexLength = 5
 	val TLBTagLength = VaLength - OffsetLength - TLBIndexLength + ASIDLength // Asid for 5 bit and VPN for 15bit
 	val TLBEntryNum = 32

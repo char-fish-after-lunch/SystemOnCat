@@ -1,4 +1,4 @@
-## Monitor routine for System on Cat
+## Meownitor: monitor routine for System on Cat
 
 Inspired by the monitor routine for 16-bit THINPAD.
 
@@ -38,6 +38,11 @@ make CFLAGS="-DWITH_CSR -DWITH_INTERRUPT -DWITH_IRQ"
 With full functionalities:
 ```
 make
+```
+
+To create an image `bootable.bin` with BootedCat that can be booted by System on Cat with MasterCat:
+```
+make START_ADR=<where to put it in memory> bootable.bin
 ```
 
 ### Notes

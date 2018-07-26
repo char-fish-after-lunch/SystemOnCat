@@ -31,7 +31,7 @@ class TLBPTWIO extends Bundle{
 }
 
 class PTWMEMIO extends Bundle{
-	val addr = Output(UInt(21.W)) //Target Address
+	val addr = Output(UInt(32.W)) //Target Address
 	val data = Input(UInt(32.W)) //Read Data
 	
 	val request = Output(Bool())
@@ -45,12 +45,7 @@ class PTWIO extends Bundle{
 	val priv = Input(UInt(2.W))
 
 	//Page Fault Exception
-	val iPF = Output(Bool())
-	val lPF = Output(Bool())
-	val sPF = Output(Bool())
-
-	//Page Fault PTE
-	val pf_vaddr = Output(UInt(MemoryConsts.VaLength.W))
+	val expt = new MMUException
 }
 
 class PTW extends Module{
@@ -74,22 +69,23 @@ class PTW extends Module{
 	val page_fault = ~pte_1_valid | ~pte_2_valid 
 
 	//mem access
-	io.mem.request := (state === s_request) | (state === s_wait1)
-	io.mem.addr := MuxLookup(state, 0.U(21.W), Seq(
+
+	io.mem.request := ((state === s_request) | (state === s_wait1)) & ~io.mem.valid
+	io.mem.addr := MuxLookup(state, 0.U(32.W), Seq(
 		s_request -> (Cat(io.baseppn, vpn_1) << 2),
 		s_wait1 -> (Cat(temp_pte.ppn, vpn_2) << 2)
 	))
 
 
 	//Page Fault Handler
-	io.pf_vaddr := io.tlb.vaddr
-	io.lPF := (mm_cmd === MemoryConsts.Load) & page_fault
-	io.sPF := (mm_cmd === MemoryConsts.Store) & page_fault
-	io.iPF := (mm_cmd === MemoryConsts.PC) & page_fault
+	io.expt.pf_vaddr := io.tlb.vaddr
+	io.expt.lPF := (mm_cmd === MemoryConsts.Load) & page_fault
+	io.expt.sPF := (mm_cmd === MemoryConsts.Store) & page_fault
+	io.expt.iPF := (mm_cmd === MemoryConsts.PC) & page_fault
 	io.tlb.pf := page_fault
-	
 	when(page_fault){
 		printf("ptw: Page Fault!\n")
+
 	}
 
 	//finish logic
@@ -118,13 +114,14 @@ class PTW extends Module{
 	when ((state === s_wait1)){
 		printf("ptw wait 1 state\n")
 		printf("ptw: first memory access get: %x\n", temp_pte.asUInt())
+
 		when(page_fault){
 			state := s_ready
 		}
 		.elsewhen(io.mem.valid === true.B) {
 			state := s_wait2
 			temp_pte := io.mem.data.asTypeOf(new PTE)
-		} 	
+		}
 	}
 	when ((state === s_wait2)){
 		printf("ptw wait 2 state\n")

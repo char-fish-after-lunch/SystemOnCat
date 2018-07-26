@@ -5,6 +5,18 @@ import chisel3.util._
 import chisel3.Bits._
 import systemoncat.mmu.MemoryConsts._
 
+object CSRConsts {
+  def MSTATUS  = "h300".U(12.W)
+  def MIE      = "h304".U(12.W)
+  def MIP      = "h344".U(12.W)
+  def MTVEC    = "h305".U(12.W)
+  def MSCRATCH = "h340".U(12.W)
+  def MEPC     = "h341".U(12.W)
+  def MCAUSE   = "h342".U(12.W)
+  def MTVAL    = "h343".U(12.W)
+  def SATP     = "h180".U(12.W)
+}
+
 object PRV
 {
   val SZ = 2.U(2.W)
@@ -47,7 +59,7 @@ object Cause{
   val ECM = 11.U(31.W)//Environment Call of M-mode
   val IPF = 12.U(31.W)//Instruction page Fault
   val LPF = 13.U(31.W)//Load page Fault
-  val SPF = 14.U(31.W)//Save page Fault
+  val SPF = 15.U(31.W)//Save page Fault
 }
 class MStatus extends Bundle{
   val sd = Bool()
@@ -258,14 +270,15 @@ class CSRFile() extends Module{
   io.read_csr_dat := 0.U(32.W)
   when(io.csr_ena & io.csr_rd_en){
     io.read_csr_dat := MuxLookup(io.csr_idx, 0.U(32.W), Seq(
-        "h300".U(12.W) -> mstatus.asUInt(),
-        "h304".U(12.W) -> mie.asUInt(),
-        "h344".U(12.W) -> mip.asUInt(),
-        "h305".U(12.W) -> mtvec.asUInt(),
-        "h340".U(12.W) -> mscratch,
-        "h341".U(12.W) -> mepc,
-        "h342".U(12.W) -> mcause,
-        "h180".U(12.W) -> satp.asUInt()
+        CSRConsts.MSTATUS  -> mstatus.asUInt(),
+        CSRConsts.MIE      -> mie.asUInt(),
+        CSRConsts.MIP      -> mip.asUInt(),
+        CSRConsts.MTVEC    -> mtvec.asUInt(),
+        CSRConsts.MTVAL    -> mtval.asUInt(),
+        CSRConsts.MSCRATCH -> mscratch,
+        CSRConsts.MEPC     -> mepc,
+        CSRConsts.MCAUSE   -> mcause,
+        CSRConsts.SATP     -> satp.asUInt()
         // "hb00".U(12.W) -> mcycle,
         // "hb80".U(12.W) -> mcycleh,
     ))
@@ -283,28 +296,28 @@ class CSRFile() extends Module{
 
   //Write CSR logic
   when(io.csr_ena & io.csr_wr_en & ~write_zero){
-    when(io.csr_idx === "h300".U(12.W)){
+    when(io.csr_idx === CSRConsts.MSTATUS){
       mstatus := wb_dat.asTypeOf(new MStatus())
     } 
-    .elsewhen(io.csr_idx === "h304".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MIE){
       mie := wb_dat.asTypeOf(new MIE())
     }
     //.elsewhen(io.csr_idx === "h344".U(12.W)){ MIP is read only
       //mip := wb_dat
     //}
-    .elsewhen(io.csr_idx === "h305".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MTVEC){
       mtvec := wb_dat.asTypeOf(new MTVEC())
     } 
-    .elsewhen(io.csr_idx === "h340".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MSCRATCH){
       mscratch := wb_dat
     } 
-    .elsewhen(io.csr_idx === "h341".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MEPC){
       mepc := wb_dat
     } 
-    .elsewhen(io.csr_idx === "h342".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.MCAUSE){
       mcause := wb_dat
     } 
-    .elsewhen(io.csr_idx === "h180".U(12.W)){
+    .elsewhen(io.csr_idx === CSRConsts.SATP){
       satp := wb_dat.asTypeOf(new SATP())
     }
     // .elsewhen(io.csr_idx === "hb00".U(12.W)){
@@ -351,7 +364,7 @@ class CSRFile() extends Module{
                 Mux(io.laddrIv, io.addr,
                 Mux(io.saddrIv, io.addr,
                 Mux(io.pcIv, io.pc,
-                Mux(io.iPF, io.pc,
+                Mux(io.iPF, io.addr,
                 Mux(io.lPF, io.addr,
                 Mux(io.sPF, io.addr, 0.U(32.W))))))))
 
@@ -362,28 +375,24 @@ class CSRFile() extends Module{
   } .elsewhen(io.isEret) { //Eret Handler
     prv := mstatus.mpp
     mstatus.mie := mstatus.mpie
-  } .elsewhen(mip.meip | io.ext_irq_r){ //Extenral Interrupt Handler
-    when(mstatus.mie & mie.meie){
-      mepc := next_pc
-      mcause := Cat(Cause.Interrupt, Cause.MEI)
-      //when(~io.ext_irq_r) {mip.meip := false.B}
-      io.interrupt := true.B
-      prv := PRV.M
-      mstatus.mpp := prv
-      mstatus.mie := false.B
-      mstatus.mpie := mstatus.mie
-    }
-  } .elsewhen(mip.msip | io.sft_irq_r){ //Software Interrupt Handler
-    when(mstatus.mie & mie.msie){
-      mepc := next_pc
-      mcause := Cat(Cause.Interrupt, Cause.MSI)
-      //when(~io.tmr_irq_r) {mip.mtip := false.B}
-      io.interrupt := true.B
-      prv := PRV.M
-      mstatus.mpp := prv
-      mstatus.mie := false.B
-      mstatus.mpie := mstatus.mie
-    }
+  } .elsewhen((mip.meip | io.ext_irq_r) && mstatus.mie && mie.meie) { //Extenral Interrupt Handler
+    mepc := next_pc
+    mcause := Cat(Cause.Interrupt, Cause.MEI)
+    //when(~io.ext_irq_r) {mip.meip := false.B}
+    io.interrupt := true.B
+    prv := PRV.M
+    mstatus.mpp := prv
+    mstatus.mie := false.B
+    mstatus.mpie := mstatus.mie
+  } .elsewhen((mip.msip | io.sft_irq_r) && mstatus.mie && mie.msie) { //Software Interrupt Handler
+    mepc := next_pc
+    mcause := Cat(Cause.Interrupt, Cause.MSI)
+    //when(~io.tmr_irq_r) {mip.mtip := false.B}
+    io.interrupt := true.B
+    prv := PRV.M
+    mstatus.mpp := prv
+    mstatus.mie := false.B
+    mstatus.mpie := mstatus.mie
   } .elsewhen(mip.mtip | io.tmr_irq_r){ //Time Interrupt Handler
     when(mstatus.mie & mie.mtie){
       mepc := next_pc
