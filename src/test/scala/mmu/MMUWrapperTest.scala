@@ -8,19 +8,19 @@ import systemoncat.sysbus._
 object MMUTestConsts{
     val ptbase_ppn = "h1".U(20.W)
     
-    val vaddr1 = "h0".U(32.W)
+    val vaddr1 = "h8".U(32.W)
     val vaddr2 = "h4".U(32.W)
     val vaddr3 = "hf000".U(32.W)
     val pf_vaddr = "h30000000".U(32.W)
 
-    val paddr1 = "h0".U(32.W)
+    val paddr1 = "h8".U(32.W)
     val paddr2 = "h4".U(32.W)
     val paddr3 = "hf000".U(32.W)
 //-------- for vaddr 1,2 --------
     val pte_1_addr = "h1000".U(32.W) //Cat(ptbase_ppn, pte_1_index) << 2
     val pte_1 = "h00000801".U(32.W)
     val pte_2_addr = "h2000".U(32.W) //Cat(pte_1(18,10), pte_2_index) << 2
-    val pte_2 = "h00000001".U(32.W)
+    val pte_2 = "h000000fe".U(32.W)
 
 //-------- for vaddr 3 -------------
     val pte_3 = "h00003c01".U(32.W)
@@ -117,8 +117,13 @@ class TMMUWrapper() extends Module {
     val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
 
     val page_fault = ptw.io.expt.iPF | ptw.io.expt.lPF | ptw.io.expt.sPF
+    when(page_fault){
+        printf("PAGE FAULT\n")
+
+    }
     printf("MMU: page_fault: %d\n",page_fault)
     printf("MMU: io.expt: %d\n", io.expt.lPF)
+
     req_reg := Mux(phase_1 && !prev_cache_hit && !page_fault, req_reg, io.req) 
 
     phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid & !page_fault , io.req.wen || io.req.ren)
@@ -142,6 +147,11 @@ class TMMUWrapper() extends Module {
     expt := ptw.io.expt
     
     io.expt := expt
+
+    printf("MMU: expt: %x\n", io.expt.pf_vaddr)
+    // io.external.ram <> translator.io.in(0)
+    // io.external.serial <> translator.io.in(1)
+    // io.external.irq_client <> translator.io.in(2)
 
     // translator.io.out
 
