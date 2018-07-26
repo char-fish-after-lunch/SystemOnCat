@@ -373,7 +373,8 @@ class CSRFile() extends Module{
     mstatus.mie := false.B
     mstatus.mpie := mstatus.mie
   } .elsewhen(io.isEret) { //Eret Handler
-    prv := io.inst(13,12)
+
+    prv := mstatus.mpp
     mstatus.mie := mstatus.mpie
   } .elsewhen((mip.meip | io.ext_irq_r) && mstatus.mie && mie.meie) { //Extenral Interrupt Handler
     mepc := next_pc
