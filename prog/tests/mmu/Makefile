@@ -1,4 +1,4 @@
-prog= pagetable serial_pagetable pagetable2 pagetable3
+prog= pagetable serial_pagetable pagetable2 pagetable3 page_fault
 
 ifndef MARCH
 MARCH:=rv32i
