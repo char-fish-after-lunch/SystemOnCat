@@ -27,6 +27,7 @@ class SysBusBundle extends Bundle {
 
 class SysBusExternal extends Bundle {
     val ram = Flipped(new SysBusSlaveBundle)
+    val ram2 = Flipped(new SysBusSlaveBundle)
     val serial = Flipped(new SysBusSlaveBundle)
     val irq_client = Flipped(new SysBusSlaveBundle)
     val plic = Flipped(new SysBusSlaveBundle)
@@ -48,22 +49,25 @@ class SysBusConnector(irq_client: Client, plic: PLIC, rom: ROM) extends Module {
 
     // val bus = Module(new RAMSlaveReflector())
     val ram_slave = Module(new RAMSlaveReflector())
+    val ram2_slave = Module(new RAMSlaveReflector())
     val serial_slave = Module(new SerialPortSlaveReflector())
     val flash_slave = Module(new FlashSlaveReflector())
     ram_slave.io.in <> io.external.ram
+    ram2_slave.io.in <> io.external.ram2
     serial_slave.io.in <> io.external.serial
     flash_slave.io.in <> io.external.flash
 
     val bus_map = Seq(
-        // default -> 0
-        BitPat("b00000000000000001111000000000???") -> 1.U(3.W),
-        BitPat("b000000100000000001000000000?????") -> 2.U(3.W),
-        BitPat("b00000010000000000100000000100???") -> 3.U(3.W),
-        BitPat("b0000001000000000010000000011????") -> 4.U(3.W),
-        BitPat("b11111111111111111111111111??????") -> 5.U(3.W)
+        BitPat("b0000000000??????????????????????") -> 1.U(3.W),
+        BitPat("b00000000011111111111111111111???") -> 2.U(3.W),
+        BitPat("b000000000111111111111111110?????") -> 3.U(3.W),
+        BitPat("b00000000011111111111111111110???") -> 4.U(3.W),
+        BitPat("b0000000001111111111111111110????") -> 5.U(3.W),
+        BitPat("b11111111111111111111111111??????") -> 6.U(3.W)
     )
     val bus_slaves: Seq[SysBusSlave] = Array(
         ram_slave,
+        ram2_slave,
         serial_slave,
         irq_client,
         plic,
@@ -73,6 +77,7 @@ class SysBusConnector(irq_client: Client, plic: PLIC, rom: ROM) extends Module {
 
     val mmu = Module(new MMUWrapper(bus_map, bus_slaves))
     mmu.io.external.ram <> ram_slave.io.out
+    mmu.io.external.ram2 <> ram2_slave.io.out
     mmu.io.external.serial <> serial_slave.io.out
     mmu.io.external.irq_client <> io.external.irq_client
     mmu.io.external.plic <> io.external.plic
