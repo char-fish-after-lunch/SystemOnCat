@@ -85,7 +85,6 @@ class PTW extends Module{
 	io.tlb.pf := page_fault
 	when(page_fault){
 		printf("ptw: Page Fault!\n")
-
 	}
 
 	//finish logic
