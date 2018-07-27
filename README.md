@@ -32,14 +32,20 @@ Vivado项目的构建方式如下：
 
 这样即可编译成Bitstream。
 
-# 在THINPAD在线平台运行监控程序
+# 编译uCat操作系统
 
-1. flash写入 `bootable.bin`（生成方式见[Meownitor的说明文档](prog/monitor/README.md))
+1. 切换到`prog/os/ucore`目录，执行`make defconfig ARCH=soc && make sfsimg && make sfsimg2 && make`
+2. 用`cat`将准备好的`prog/bootloader/bootedcat.bin`和`prog/os/ucore/obj/kernel/kernel-soc.elf`拼接，前者在前，得到的文件即为可引导的镜像
+
+# 在THINPAD平台上运行程序
+
+1. 将可引导的镜像文件写入flash（起始地址为0）
 2. 随便读一下ram数据（如设置 存储选择　baseRAM,  addr 0, size 2，点击"读取"）
 3. 更新设计文件，再次写入 `thinpat_top.bit`
-4. 最左的两个和最右的两个拨码开关均为1时为高频时钟，否则为手动时钟
-5. 为了利用串口进行输入输出，将串口设置为直连，波特率9600
-   
+4. 在开启高频时钟前，进行系统复位（按住reset时按一下clock）
+5. 最左的两个和最右的两个拨码开关均为1时为高频时钟，否则为手动时钟
+6. 为了利用串口进行输入输出，将串口设置为直连，波特率9600
+
 
 # 相关说明
 

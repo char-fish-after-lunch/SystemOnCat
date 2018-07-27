@@ -56,11 +56,16 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
     val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
 
+    val paddr_reg_accessing = RegInit(Bool(), true.B)
+    val paddr_reg_pagefault = RegInit(Bool(), false.B)
+    val ptw_reg_accessing = RegInit(Bool(), false.B)
+
     val page_fault = ptw.io.expt.iPF | ptw.io.expt.lPF | ptw.io.expt.sPF
     
-    req_reg := Mux(phase_1 && !prev_cache_hit && !page_fault, req_reg, io.req) 
+    req_reg := Mux(page_fault, 0.U.asTypeOf(new MMURequest()),
+        Mux(phase_1 && !prev_cache_hit, req_reg, io.req)) 
 
-    phase_1 := Mux(phase_1 && !prev_cache_hit, !tlb.io.valid & !page_fault , io.req.wen || io.req.ren)
+    phase_1 := Mux(page_fault, false.B, Mux(phase_1 && !prev_cache_hit, !tlb.io.valid, io.req.wen || io.req.ren))
     // phase 1. vaddr -> paddr, 1 cycle if tlb hit, more cycles if tlb miss
     // phase 2. paddr -> data, 0 cycle if cache hit, 1 cycle if cache miss
 
@@ -82,11 +87,12 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     
     io.expt := expt
     io.external.ram <> translator.io.in(0)
-    io.external.serial <> translator.io.in(1)
-    io.external.irq_client <> translator.io.in(2)
-    io.external.plic <> translator.io.in(3)
-    io.external.flash <> translator.io.in(4)
-    io.external.rom <> translator.io.in(5)
+    io.external.ram2 <> translator.io.in(1)
+    io.external.serial <> translator.io.in(2)
+    io.external.irq_client <> translator.io.in(3)
+    io.external.plic <> translator.io.in(4)
+    io.external.flash <> translator.io.in(5)
+    io.external.rom <> translator.io.in(6)
 
     // translator.io.out
 
@@ -96,10 +102,6 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     translator.io.out.stb_i := Mux(tlb.io.valid, phase_1 || prev_cache_hit, ptw.io.mem.request)
     translator.io.out.cyc_i := true.B
     translator.io.out.we_i := Mux(tlb.io.valid, req_reg.wen, false.B) // ptw never writes
-
-    val paddr_reg_accessing = RegInit(Bool(), true.B)
-    val paddr_reg_pagefault = RegInit(Bool(), false.B)
-    val ptw_reg_accessing = RegInit(Bool(), false.B)
 
     paddr_reg_accessing := tlb.io.valid // if tlb is valid in the prev cycle, then in the next cycle r/w is finished
     ptw_reg_accessing := ptw.io.mem.request // ptw asks for memory access

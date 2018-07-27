@@ -69,7 +69,8 @@ class PTW extends Module{
 	val page_fault = ~pte_1_valid | ~pte_2_valid 
 
 	//mem access
-	io.mem.request := (state === s_request) | (state === s_wait1)
+
+	io.mem.request := ((state === s_request) | (state === s_wait1)) & ~io.mem.valid
 	io.mem.addr := MuxLookup(state, 0.U(32.W), Seq(
 		s_request -> (Cat(io.baseppn, vpn_1) << 2),
 		s_wait1 -> (Cat(temp_pte.ppn, vpn_2) << 2)
@@ -84,7 +85,6 @@ class PTW extends Module{
 	io.tlb.pf := page_fault
 	when(page_fault){
 		printf("ptw: Page Fault!\n")
-
 	}
 
 	//finish logic
@@ -113,13 +113,14 @@ class PTW extends Module{
 	when ((state === s_wait1)){
 		printf("ptw wait 1 state\n")
 		printf("ptw: first memory access get: %x\n", temp_pte.asUInt())
+
 		when(page_fault){
 			state := s_ready
 		}
 		.elsewhen(io.mem.valid === true.B) {
 			state := s_wait2
 			temp_pte := io.mem.data.asTypeOf(new PTE)
-		} 	
+		}
 	}
 	when ((state === s_wait2)){
 		printf("ptw wait 2 state\n")
