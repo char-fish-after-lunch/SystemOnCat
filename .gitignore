@@ -105,3 +105,6 @@ project/plugins/project/
 out/
 test_run_dir/
 log*.txt
+
+#vim editor swap file
+*.swp

@@ -1,0 +1,3 @@
+[submodule "prog/os"]
+	path = prog/os
+	url = https://github.com/char-fish-after-lunch/uCat.git

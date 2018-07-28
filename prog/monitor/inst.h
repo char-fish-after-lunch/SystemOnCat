@@ -38,9 +38,10 @@
 #define INST_SRA 34
 #define INST_OR 35
 #define INST_AND 36
+#define INST_ECALL 37
 
 
-#define INST_N 37
+#define INST_N 38
 
 #define ITYPE_R 0
 #define ITYPE_I 1
@@ -48,6 +49,7 @@
 #define ITYPE_B 3
 #define ITYPE_U 4
 #define ITYPE_J 5
+#define ITYPE_F 6
 
 #define MAX_INST_NAME_LEN 7
 
@@ -89,7 +91,8 @@ const char INST_NAMES[INST_N][MAX_INST_NAME_LEN] =
     "srl",
     "sra",
     "or",
-    "and"
+    "and",
+    "ecall"
 };
 
 
@@ -131,7 +134,8 @@ const unsigned INST_CONFIG[INST_N][4] = {
     {ITYPE_R, 0b0110011, 0b101, 0b0000000},
     {ITYPE_R, 0b0110011, 0b101, 0b0100000},
     {ITYPE_R, 0b0110011, 0b110, 0b0000000},
-    {ITYPE_R, 0b0110011, 0b111, 0b0000000}
+    {ITYPE_R, 0b0110011, 0b111, 0b0000000},
+    {ITYPE_F, 0b1110011, 0, 0}
 };
 
 #endif
