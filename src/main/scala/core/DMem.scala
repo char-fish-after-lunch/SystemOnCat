@@ -3,18 +3,32 @@ package systemoncat.core
 import chisel3._
 import chisel3.util._
 
-class DMemCoreIO extends Bundle {
+class DMemRequest extends Bundle {
     val addr = Input(UInt(32.W))
     val wr_data = Input(UInt(32.W))
-    val rd_data = Output(UInt(32.W))
     val wr_en = Input(Bool())
     val rd_en = Input(Bool())
+    val lr_en = Input(Bool())
+    val sc_en = Input(Bool())
     val mem_type = Input(Bits(MEM_X.getWidth.W))
+}
+
+class DMemExceptions extends Bundle {
     val wr_addr_invalid_expt = Output(Bool())
     val rd_addr_invalid_expt = Output(Bool())
     val wr_access_err_expt = Output(Bool())
     val rd_access_err_expt = Output(Bool())
+}
+
+class DMemResponse extends Bundle {
+    val rd_data = Output(UInt(32.W))
+    val expt = new DMemExceptions
     val locked = Output(Bool())
+}
+
+class DMemCoreIO extends Bundle {
+    val req = new DMemRequest
+    val res = new DMemResponse
 }
 
 class DMemIO extends Bundle {
@@ -35,18 +49,18 @@ class DMem extends Module {
     val prev_addr_err = RegInit(false.B)
 
     when (!io.bus.res.locked) {
-        prev_wr_data := io.core.wr_data
-        prev_addr := io.core.addr
-        prev_wr_en := io.core.wr_en
-        prev_rd_en := io.core.rd_en
-        prev_mem_type := io.core.mem_type
+        prev_wr_data := io.core.req.wr_data
+        prev_addr := io.core.req.addr
+        prev_wr_en := io.core.req.wr_en
+        prev_rd_en := io.core.req.rd_en
+        prev_mem_type := io.core.req.mem_type
     }
 
-    val cur_wr_data = Mux(io.bus.res.locked, prev_wr_data, io.core.wr_data)
-    val cur_addr = Mux(io.bus.res.locked, prev_addr, io.core.addr)
-    val cur_wr_en = Mux(io.bus.res.locked, prev_wr_en, io.core.wr_en)
-    val cur_rd_en = Mux(io.bus.res.locked, prev_rd_en, io.core.rd_en)
-    val cur_mem_type = Mux(io.bus.res.locked, prev_mem_type, io.core.mem_type)
+    val cur_wr_data = Mux(io.bus.res.locked, prev_wr_data, io.core.req.wr_data)
+    val cur_addr = Mux(io.bus.res.locked, prev_addr, io.core.req.addr)
+    val cur_wr_en = Mux(io.bus.res.locked, prev_wr_en, io.core.req.wr_en)
+    val cur_rd_en = Mux(io.bus.res.locked, prev_rd_en, io.core.req.rd_en)
+    val cur_mem_type = Mux(io.bus.res.locked, prev_mem_type, io.core.req.mem_type)
 
     val byte_masks = Seq(
         0.U(4.W) -> "b0001".U(4.W),
@@ -118,10 +132,10 @@ class DMem extends Module {
         MEM_H -> Cat(Fill(16, hword_data(15)), hword_data(15, 0)),
         MEM_HU -> Cat(Fill(16, 0.U(1.W)), hword_data(15, 0))
     ))
-    io.core.rd_data := Mux(prev_rd_en, ext_data, 0.U(32.W))
-    io.core.locked := io.bus.res.locked
-    io.core.wr_addr_invalid_expt := prev_wr_en && prev_addr_err
-    io.core.wr_access_err_expt := prev_wr_en && (!prev_addr_err) && io.bus.res.err
-    io.core.rd_addr_invalid_expt := prev_rd_en && prev_addr_err
-    io.core.rd_access_err_expt := prev_rd_en && (!prev_addr_err) && io.bus.res.err
+    io.core.res.rd_data := Mux(prev_rd_en, ext_data, 0.U(32.W))
+    io.core.res.locked := io.bus.res.locked
+    io.core.res.expt.wr_addr_invalid_expt := prev_wr_en && prev_addr_err
+    io.core.res.expt.wr_access_err_expt := prev_wr_en && (!prev_addr_err) && io.bus.res.err
+    io.core.res.expt.rd_addr_invalid_expt := prev_rd_en && prev_addr_err
+    io.core.res.expt.rd_access_err_expt := prev_rd_en && (!prev_addr_err) && io.bus.res.err
 }

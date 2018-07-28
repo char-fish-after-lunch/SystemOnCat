@@ -108,7 +108,11 @@ object Decoder {
         CSRRC->      List(Y,N,A1_RS1, A2_ZERO,IMM_X,ALU_OP_ADD, N,N,N,MOP_X, MEM_X, Y,WB_CSR,CSR.C,Y,N,N,N,N,N),
         CSRRWI->     List(N,N,A1_ZERO,A2_IMM, IMM_Z,ALU_OP_ADD, N,N,N,MOP_X, MEM_X, Y,WB_CSR,CSR.W,Y,N,N,N,N,N),
         CSRRSI->     List(N,N,A1_ZERO,A2_IMM, IMM_Z,ALU_OP_ADD, N,N,N,MOP_X, MEM_X, Y,WB_CSR,CSR.S,Y,N,N,N,N,N),
-        CSRRCI->     List(N,N,A1_ZERO,A2_IMM, IMM_Z,ALU_OP_ADD, N,N,N,MOP_X, MEM_X, Y,WB_CSR,CSR.C,Y,N,N,N,N,N)
+        CSRRCI->     List(N,N,A1_ZERO,A2_IMM, IMM_Z,ALU_OP_ADD, N,N,N,MOP_X, MEM_X, Y,WB_CSR,CSR.C,Y,N,N,N,N,N),
+
+
+        LR->         List(Y,N,A1_RS1 ,A2_ZERO,IMM_X,ALU_OP_ADD, N,N,Y,MOP_LR,MEM_W, Y,WB_MEM,CSR.N,Y,N,N,N,N,N),
+        SC->         List(Y,Y,A1_RS1 ,A2_ZERO,IMM_X,ALU_OP_ADD, N,N,Y,MOP_SC,MEM_W, Y,WB_MEM,CSR.N,Y,N,N,N,N,N)
     )
 }
 
