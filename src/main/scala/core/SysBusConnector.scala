@@ -12,6 +12,7 @@ class SysBusRequest extends Bundle {
     val sel = Input(UInt(4.W))
     val wen = Input(Bool())
     val ren = Input(Bool())
+    val en = Input(Bool())
 }
 
 class SysBusResponse extends Bundle {
@@ -36,8 +37,8 @@ class SysBusConnectorIO extends Bundle {
 class SysBusConnector extends Module {
     val io = IO(new SysBusConnectorIO())
 
-    val imem_en = io.imem.req.wen || io.imem.req.ren
-    val dmem_en = io.dmem.req.wen || io.dmem.req.ren
+    val imem_en = io.imem.req.en
+    val dmem_en = io.dmem.req.en
     io.req.addr := Mux(dmem_en, io.dmem.req.addr, // data memory first
         Mux(imem_en, io.imem.req.addr, 0.U(32.W)))
     io.req.data_wr := Mux(io.dmem.req.wen, io.dmem.req.data_wr, 0.U(32.W))

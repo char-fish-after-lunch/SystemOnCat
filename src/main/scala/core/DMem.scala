@@ -36,14 +36,48 @@ class DMemIO extends Bundle {
     val bus = Flipped(new SysBusBundle)
 }
 
+object AtomicConsts {
+    def LoadReservationCycles = 126.U(7.W) 
+    // The static code for the LR/SC sequence plus the code to retry the sequence in case
+    // of failure must comprise at most 16 integer instructions placed sequentially in memory. -- riscv-spec-v2.2, p41
+    // However, TLB refill & cache refill costs taken into consideration, a much larger limit is needed.
+
+}
+
+import AtomicConsts._
+
 class DMem extends Module {
-    // TODO: implement me!
     val io = IO(new DMemIO)
+
+    val lr_valid_counter = RegInit(UInt(), 0.U(LoadReservationCycles.getWidth.W))
+    // lr_valid_counter == 0: no addr is reserved
+    // else: a LR has been waiting for x cycles
+    // when reserved addr is writen, this is reset to 0.
+
+    val lr_valid = (lr_valid_counter =/= 0.U)
+    val lr_reserved_addr = RegInit(UInt(), 0.U(32.W))
+
+    when (io.core.req.lr_en) {
+        lr_reserved_addr := io.core.req.addr
+    }
+
+    lr_valid_counter := Mux(io.core.req.wr_en && io.core.req.addr === lr_reserved_addr, 0.U,
+        Mux(io.core.req.lr_en, 1.U,
+        Mux(lr_valid_counter === LoadReservationCycles, 0.U,
+        Mux(lr_valid_counter === 0.U, 0.U, lr_valid_counter + 1.U))))
+
+    val sc_valid = io.core.req.sc_en && lr_valid && lr_reserved_addr === io.core.req.addr
+    // reservation is valid, store conditional succeeded
+
+    val en = io.core.req.sc_en || io.core.req.rd_en || io.core.req.wr_en
 
     val prev_wr_data = RegInit(0.U(32.W))
     val prev_addr = RegInit(0.U(32.W))
+    val prev_en = RegInit(false.B)
     val prev_wr_en = RegInit(false.B)
     val prev_rd_en = RegInit(false.B)
+    val prev_sc_en = RegInit(false.B)
+    val prev_sc_valid = RegInit(false.B)
     val prev_mem_type = RegInit(MEM_X)
     val prev_mask = RegInit(0.U(4.W))
     val prev_addr_err = RegInit(false.B)
@@ -51,14 +85,18 @@ class DMem extends Module {
     when (!io.bus.res.locked) {
         prev_wr_data := io.core.req.wr_data
         prev_addr := io.core.req.addr
-        prev_wr_en := io.core.req.wr_en
+        prev_wr_en := io.core.req.wr_en || sc_valid
         prev_rd_en := io.core.req.rd_en
+        prev_sc_en := io.core.req.sc_en
+        prev_en := en
+        prev_sc_valid := sc_valid
         prev_mem_type := io.core.req.mem_type
     }
 
     val cur_wr_data = Mux(io.bus.res.locked, prev_wr_data, io.core.req.wr_data)
     val cur_addr = Mux(io.bus.res.locked, prev_addr, io.core.req.addr)
-    val cur_wr_en = Mux(io.bus.res.locked, prev_wr_en, io.core.req.wr_en)
+    val cur_en = Mux(io.bus.res.locked, prev_en, en)
+    val cur_wr_en = Mux(io.bus.res.locked, prev_wr_en, io.core.req.wr_en || sc_valid)
     val cur_rd_en = Mux(io.bus.res.locked, prev_rd_en, io.core.req.rd_en)
     val cur_mem_type = Mux(io.bus.res.locked, prev_mem_type, io.core.req.mem_type)
 
@@ -111,6 +149,7 @@ class DMem extends Module {
     io.bus.req.sel := mask
     io.bus.req.wen := cur_wr_en && (!addr_err)
     io.bus.req.ren := cur_rd_en && (!addr_err)
+    io.bus.req.en := cur_en && (!addr_err)
     io.bus.req.addr := cur_addr
     io.bus.req.data_wr := wr_data
 
@@ -132,7 +171,9 @@ class DMem extends Module {
         MEM_H -> Cat(Fill(16, hword_data(15)), hword_data(15, 0)),
         MEM_HU -> Cat(Fill(16, 0.U(1.W)), hword_data(15, 0))
     ))
-    io.core.res.rd_data := Mux(prev_rd_en, ext_data, 0.U(32.W))
+    io.core.res.rd_data := Mux(prev_sc_en, Mux(prev_sc_valid, 0.U(32.W), 1.U(32.W)),
+        Mux(prev_rd_en, ext_data, 0.U(32.W)))
+
     io.core.res.locked := io.bus.res.locked
     io.core.res.expt.wr_addr_invalid_expt := prev_wr_en && prev_addr_err
     io.core.res.expt.wr_access_err_expt := prev_wr_en && (!prev_addr_err) && io.bus.res.err

@@ -32,6 +32,7 @@ class IFetch extends Module {
     io.bus.req.sel := 15.U(4.W)
     io.bus.req.wen := false.B
     io.bus.req.ren := !pc_invalid
+    io.bus.req.en := !pc_invalid
 
     val pc_reg_invalid = RegInit(Bool(), false.B)    
 

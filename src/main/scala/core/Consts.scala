@@ -34,7 +34,7 @@ trait DecoderConstants {
     def MOP_FL   = 3.U(3.W) // flush(used in fence)
     def MOP_LR   = 4.U(3.W) // load reserved
     def MOP_SC   = 5.U(3.W) // store conditional
-    def isRead(cmd: UInt) = cmd === MOP_RD
+    def isRead(cmd: UInt) = (cmd === MOP_RD) || (cmd === MOP_LR)
     def isWrite(cmd: UInt) = cmd === MOP_WR
 
 
