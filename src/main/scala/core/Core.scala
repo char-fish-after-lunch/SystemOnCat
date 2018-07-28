@@ -32,6 +32,7 @@ class Core() extends Module {
 
     val bus_conn = Module(new SysBusConnector())
     val mmu = Module(new MMUWrapper())
+    val cache = Module(new Cache())
 
     mmu.io.csr_info <> dpath.io.mmu_csr_info
     mmu.io.expt <> dpath.io.mmu_expt
@@ -50,6 +51,6 @@ class Core() extends Module {
 
     io.ext_irq_r <> dpath.io.ext_irq_r
 
-    mmu.io.bus_request <> io.bus_request
-
+    mmu.io.bus_request <> cache.io.slave
+    cache.io.master <> io.bus_request
 }

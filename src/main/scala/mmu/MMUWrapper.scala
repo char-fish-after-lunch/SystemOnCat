@@ -53,7 +53,8 @@ class MMUWrapper extends Module {
 
     val phase_1 = RegInit(false.B)
     val req_reg = RegInit(0.U.asTypeOf(new MMURequest()))
-    val prev_cache_hit = false.B // placeholder for future cache support. TODO: implement me
+    val prev_cache_hit = tlb.io.valid && io.bus_request.ack_o
+    // placeholder for future cache support. TODO: implement me
 
     val paddr_reg_accessing = RegInit(Bool(), true.B)
     val paddr_reg_pagefault = RegInit(Bool(), false.B)

@@ -43,17 +43,17 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
             r_valids(_index * wayCount.U + way_index)
     }
 
-    val stb := io.bus.slave.stb_i
-    val cyc := io.bus.slave.cyc_i
-    val we := io.bus.slave.we_i
-    val adr := io.bus.slave.adr_i
+    val stb = io.bus.slave.stb_i
+    val cyc = io.bus.slave.cyc_i
+    val we = io.bus.slave.we_i
+    val adr = io.bus.slave.adr_i
     val index = adr(tagStart - 1, indexStart)
     val tag = adr(31, tagStart)
     val offset = adr(indexStart - 1, 0) & ~3.U
     val way_index = getWayIndex(index, tag)
     val entry_valid = isEntryValid(_index, _tag, _way_index)
-    val dat := io.bus.slave.dat_i
-    val sel := io.bus.slave.sel_i
+    val dat = io.bus.slave.dat_i
+    val sel = io.bus.slave.sel_i
 
 
     val cur_adr = RegInit(UInt(32.W), 0.U)
@@ -97,8 +97,8 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
 
     val ack_i = RegInit(Bool(), false.B)
     val dat_i = RegInit(UInt(32.W), 0.U)
-    ack_i := io.bus.master.ack_i
-    dat_i := io.bus.master.dat_i
+    ack_i := io.bus.master.ack_o
+    dat_i := io.bus.master.dat_o
 
 
     io.bus.slave.ack_o := ack
@@ -178,7 +178,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
                 printf("bad!\n");
                 // write back
                 val offset = Wire(UInt(blockWidth.W))
-                when(wb_count > 0.U && !io.bus.master.ack_i){
+                when(wb_count > 0.U && !io.bus.master.ack_o){
                     offset := (wb_count - 1.U) << 2.U
                 }.otherwise{
                     offset := wb_count << 2.U
@@ -191,7 +191,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
             }
         }.otherwise{
             val c_offset = Wire(UInt(blockWidth.W))
-            when(!io.bus.master.ack_i){
+            when(!io.bus.master.ack_o){
                 c_offset := (ld_count - 1.U) << 2.U
             }.otherwise{
                 writeEntry(cur_index, cur_way_index, (ld_count - 1.U) << 
@@ -214,12 +214,12 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int) extends Module{
         }
     }
 
-    io.bus.master.cyc_o := cyc_o
-    io.bus.master.stb_o := cyc_o
-    io.bus.master.dat_o := dat_o
-    io.bus.master.we_o := we_o
-    io.bus.master.adr_o := adr_o
-    io.bus.master.sel_o := 0xf.U
+    io.bus.master.cyc_i := cyc_o
+    io.bus.master.stb_i := cyc_o
+    io.bus.master.dat_i := dat_o
+    io.bus.master.we_i := we_o
+    io.bus.master.adr_i := adr_o
+    io.bus.master.sel_i := 0xf.U
 
 
 }
