@@ -3,6 +3,7 @@ package systemoncat.core
 import chisel3._
 import chisel3.util._
 import systemoncat.sysbus._
+import systemoncat.mmu._
 import systemoncat.devices.ROM
 import systemoncat.devices.PLICInterface
 
@@ -30,10 +31,12 @@ class Core() extends Module {
     val dmem = Module(new DMem)
 
     val bus_conn = Module(new SysBusConnector())
+    val mmu = Module(new MMUWrapper())
 
-    bus_conn.io.mmu_csr_info <> dpath.io.mmu_csr_info
-    bus_conn.io.mmu_expt <> dpath.io.mmu_expt
-    bus_conn.io.bus_request <> io.bus_request
+    mmu.io.csr_info <> dpath.io.mmu_csr_info
+    mmu.io.expt <> dpath.io.mmu_expt
+    bus_conn.io.req <> mmu.io.req
+    bus_conn.io.res <> mmu.io.res
 
     dpath.io.ctrl <> ctrl.io
     dpath.io.debug_devs <> io.devs
@@ -45,5 +48,8 @@ class Core() extends Module {
     ifetch.io.pending <> bus_conn.io.imem_pending
     dmem.io.bus <> bus_conn.io.dmem
 
-    io.ext_irq_r <> dpath.io.core1_ext_irq_r
+    io.ext_irq_r <> dpath.io.ext_irq_r
+
+    mmu.io.bus_request <> io.bus_request
+
 }

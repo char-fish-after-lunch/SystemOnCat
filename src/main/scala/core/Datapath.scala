@@ -12,7 +12,7 @@ class DatapathIO() extends Bundle {
     val irq_client = Flipped(new ClientIrqIO)
     val mmu_csr_info = Flipped(new CSRInfo())
     val mmu_expt = Flipped(new MMUException())
-    val core1_ext_irq_r = Input(Bool())
+    val ext_irq_r = Input(Bool())
 }
 
 class Datapath() extends Module {
@@ -356,8 +356,7 @@ class Datapath() extends Module {
 
     csr.io.csr_idx := wb_reg_inst(31,20)
 
-    csr.io.ext_irq_r := io.core1_ext_irq_r // temporarily set to core1 as there would
-    // only be one core
+    csr.io.ext_irq_r := io.ext_irq_r
     csr.io.sft_irq_r := io.irq_client.sft_irq_r
     csr.io.tmr_irq_r := io.irq_client.tmr_irq_r
 
@@ -467,7 +466,7 @@ class Datapath() extends Module {
         2.U -> Cat(io.dmem.rd_data(7, 0), io.dmem.wr_data(7, 0)),
         3.U -> Cat(pc_reg_valid, id_reg_valid, ex_reg_valid, mem_reg_valid,
             ex_reg_expt, mem_reg_expt, wb_reg_expt, wb_reg_interp, 
-            cur_mem_interp, prev_mem_interp, mem_has_exception, io.core1_ext_irq_r,
+            cur_mem_interp, prev_mem_interp, mem_has_exception, io.ext_irq_r,
             io.irq_client.tmr_irq_r, csr_branch, mem_reg_replay, mem_replay)
     ))
     io.debug_devs.dpy0 := pc(7, 0)

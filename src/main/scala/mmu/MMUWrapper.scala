@@ -5,7 +5,7 @@ import chisel3.util._
 import systemoncat.core._
 import systemoncat.sysbus._
 
-class MMURequest extends Bundle {
+class MMURequest extends Bundle { // MMURequest is undirected because we need it as a Chisel type later
     val addr = UInt(32.W)
     val data_wr = UInt(32.W)
     val sel = UInt(4.W)
