@@ -63,8 +63,8 @@ class SystemOnCat extends Module {
     )
 
     // ------- Connector --------
-    val arbitor = Module(new SysBusArbiter(1))
-    arbitor.io.in(0) <> core1.io.bus_request
+    val arbiter = Module(new SysBusArbiter(1))
+    arbiter.io.in(0) <> core1.io.bus_request
 
     val translator = Module(new SysBusTranslator(bus_map, bus_slaves))
 
@@ -76,6 +76,6 @@ class SystemOnCat extends Module {
     flash_slave.io.out <> translator.io.in(5)
     rom.io.out <> translator.io.in(6)
 
-    arbitor.io.out <> translator.io.out
+    arbiter.io.out <> translator.io.out
 
 }
