@@ -294,8 +294,9 @@ class CSRFile() extends Module{
   // in CSRRS/CSRRC/CSRRSI/CSRRCI, inst(19:15) == 0 indicates no writing.
   // but in CSRRW/CSRRWI, that means setting CSR to 0.U(32.W)
 
+  val user_mode = (prv < PRV.M)
   //Write CSR logic
-  when(io.csr_ena & io.csr_wr_en & ~write_zero){
+  when(io.csr_ena & io.csr_wr_en & ~write_zero & ~user_mode){
     when(io.csr_idx === CSRConsts.MSTATUS){
       mstatus := wb_dat.asTypeOf(new MStatus())
     } 
