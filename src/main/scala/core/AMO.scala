@@ -19,38 +19,92 @@ object AMO_OP {
 import AMO_OP._
 
 class AMORequest extends Bundle {
-    val request = Bool()
     val addr = UInt(32.W)
     val rs2_data = UInt(32.W)
+    val amo_op = UInt(AMO_X.getWidth.W)
 }
 
 class AMOResponse extends Bundle {
-    val done = Bool()
+    val locked = Bool()
     val data = UInt(32.W)
 }
 
-class AMOBusIO extends Bundle {
-    val res = Flipped(new SysBusResponse)
-    val req = Flipped(new SysBusRequest)
-}
-
 class AMOIO extends Bundle {
+    val request = Input(Bool())
     val req = Input(new AMORequest)
     val res = Output(new AMOResponse)
-    val bus = new AMOBusIO
+    val bus = Flipped(new SysBusBundle)
 }
 
 class AMO extends Module {
     val io = IO(new AMOIO)
     val amoalu = Module(new AMOALU)
 
-    private def STATE_IDLE = 0.U
-    private def STATE_LOAD = 1.U
-    private def STATE_SAVE = 2.U
+    val sIDLE :: sLOAD :: sLOAD_WAIT :: sSTORE :: sSTORE_WAIT :: Nil = Enum(5)
+    // sIDLE: All operation finished, ready for next request.
+    // sLOAD: Sending a load request to sysbus (our sysbus requires data before a rising clk)
+    // sLOAD_WAIT: Waiting for load request. 
+    // sSTORE: When the data is loaded, send it to AMOALU & send a store request to sysbus.
+    // sSTORE_WAIT: Waiting for the store request.
 
-    val state = RegInit(UInt(2.W), STATE_IDLE)
-    // val ack = 
-    // TODO: implement me!
+    val state = RegInit(sIDLE)
+    val locked = !(state === sIDLE)
+
+    val cur_request = RegInit(0.U.asTypeOf(new AMORequest()))
+    val cur_loaded_data = RegInit(UInt(), 0.U(32.W))
+    val cur_wr_data = RegInit(UInt(), 0.U(32.W))
+
+    io.bus.req.addr := cur_request.addr
+    io.bus.req.data_wr := cur_wr_data
+    io.bus.req.sel := 15.U(4.W)
+    io.bus.req.ren := false.B
+    io.bus.req.wen := false.B
+    io.bus.req.en := locked
+
+    amoalu.io.cmd := cur_request.amo_op
+    amoalu.io.op1 := cur_loaded_data
+    amoalu.io.op2 := cur_request.rs2_data
+    // amoalu is fully combinatoral
+
+    switch (state) {
+        is(sIDLE) {
+            when (io.request) {
+                state := sLOAD
+                cur_request := io.req
+            }
+        }
+        is(sLOAD) {
+            state := sLOAD_WAIT
+            io.bus.req.ren := true.B
+            io.bus.req.wen := false.B
+        }
+        is(sLOAD_WAIT) {
+            when (io.bus.res.err) {
+                state := sIDLE
+            }
+            .elsewhen (!io.bus.res.locked) {
+                cur_loaded_data := io.bus.res.data_rd
+                state := sSTORE
+            }
+        }
+        is(sSTORE) {
+            cur_wr_data := amoalu.io.out
+            io.bus.req.ren := false.B
+            io.bus.req.wen := true.B
+            state := sSTORE_WAIT
+        }
+        is(sSTORE_WAIT) {
+            when (io.bus.res.err) {
+                state := sIDLE
+            }
+            .elsewhen (!io.bus.res.locked) {
+                state := sIDLE
+            }
+        }
+    }
+    io.res.locked := locked
+    io.res.data := cur_loaded_data
+    
 }
 
 class AMOALUIO extends Bundle {
@@ -63,18 +117,18 @@ class AMOALUIO extends Bundle {
 class AMOALU extends Module {
     val io = IO(new AMOALUIO)
 
-    val op1_lt_op2 = op1.asUInt < op2.asUInt
-    val op1_ltu_op2 = op1.asSInt < op2.asSInt
+    val op1_lt_op2 = io.op1.asUInt < io.op2.asUInt
+    val op1_ltu_op2 = io.op1.asSInt < io.op2.asSInt
 
-    io.out = MuxLookup(io.cmd, 0.U(32.W), Seq(
-        AMO_SWAP -> op2,
-        AMO_ADD  -> op1 + op2,
-        AMO_AND  -> op1 & op2,
-        AMO_OR   -> op1 | op2,
-        AMO_XOR  -> op1 ^ op2,
-        AMO_MAX  -> Mux(op1_lt_op2, op2, op1),
-        AMO_MIN  -> Mux(op1_lt_op2, op1, op2),
-        AMO_MAXU -> Mux(op1_ltu_op2, op2, op1),
-        AMO_MINU -> Mux(op1_ltu_op2, op1, op2),
+    io.out := MuxLookup(io.cmd, 0.U(32.W), Seq(
+        AMO_SWAP -> (io.op2),
+        AMO_ADD  -> (io.op1 + io.op2),
+        AMO_AND  -> (io.op1 & io.op2),
+        AMO_OR   -> (io.op1 | io.op2),
+        AMO_XOR  -> (io.op1 ^ io.op2),
+        AMO_MAX  -> Mux(op1_lt_op2, io.op2, io.op1),
+        AMO_MIN  -> Mux(op1_lt_op2, io.op1, io.op2),
+        AMO_MAXU -> Mux(op1_ltu_op2, io.op2, io.op1),
+        AMO_MINU -> Mux(op1_ltu_op2, io.op1, io.op2),
     ))
 }

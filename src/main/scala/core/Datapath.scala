@@ -305,6 +305,7 @@ class Datapath() extends Module {
     io.dmem.req.rd_en := ex_functioning && ex_ctrl_sigs.mem && isRead(ex_ctrl_sigs.mem_cmd)
     io.dmem.req.lr_en := ex_functioning && ex_ctrl_sigs.mem && ex_ctrl_sigs.mem_cmd === MOP_LR
     io.dmem.req.sc_en := ex_functioning && ex_ctrl_sigs.mem && ex_ctrl_sigs.mem_cmd === MOP_SC
+    io.dmem.req.amo_en := ex_functioning && ex_ctrl_sigs.mem && ex_ctrl_sigs.mem_cmd === MOP_A
     // tricky. 
 
     io.dmem.req.mem_type := ex_ctrl_sigs.mem_type

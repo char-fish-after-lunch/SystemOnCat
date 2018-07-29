@@ -10,6 +10,7 @@ class DMemRequest extends Bundle {
     val rd_en = Input(Bool())
     val lr_en = Input(Bool())
     val sc_en = Input(Bool())
+    val amo_en = Input(Bool())
     val mem_type = Input(Bits(MEM_X.getWidth.W))
     val amo_op = Input(Bits(AMO_OP.AMO_X.getWidth.W))
 }
@@ -84,8 +85,12 @@ class DMem extends Module {
     val prev_mem_type = RegInit(MEM_X)
     val prev_mask = RegInit(0.U(4.W))
     val prev_addr_err = RegInit(false.B)
+    val prev_amo_en = RegInit(false.B)
+    val prev_amo_op = RegInit(false.B)
 
-    when (!io.bus.res.locked) {
+    val amo_locked = Wire(Bool())
+    val cur_locked = !io.bus.res.locked || amo_locked
+    when (!cur_locked) {
         prev_wr_data := io.core.req.wr_data
         prev_addr := io.core.req.addr
         prev_wr_en := io.core.req.wr_en || sc_valid
@@ -94,14 +99,18 @@ class DMem extends Module {
         prev_en := en
         prev_sc_valid := sc_valid
         prev_mem_type := io.core.req.mem_type
+        prev_amo_en := io.core.req.amo_en
+        prev_amo_op := io.core.req.amo_op
     }
 
-    val cur_wr_data = Mux(io.bus.res.locked, prev_wr_data, io.core.req.wr_data)
-    val cur_addr = Mux(io.bus.res.locked, prev_addr, io.core.req.addr)
-    val cur_en = Mux(io.bus.res.locked, prev_en, en)
-    val cur_wr_en = Mux(io.bus.res.locked, prev_wr_en, io.core.req.wr_en || sc_valid)
-    val cur_rd_en = Mux(io.bus.res.locked, prev_rd_en, io.core.req.rd_en)
-    val cur_mem_type = Mux(io.bus.res.locked, prev_mem_type, io.core.req.mem_type)
+    val cur_wr_data = Mux(cur_locked, prev_wr_data, io.core.req.wr_data)
+    val cur_addr = Mux(cur_locked, prev_addr, io.core.req.addr)
+    val cur_en = Mux(cur_locked, prev_en, en)
+    val cur_wr_en = Mux(cur_locked, prev_wr_en, io.core.req.wr_en || sc_valid)
+    val cur_rd_en = Mux(cur_locked, prev_rd_en, io.core.req.rd_en)
+    val cur_mem_type = Mux(cur_locked, prev_mem_type, io.core.req.mem_type)
+    val cur_amo_en = Mux(cur_locked, prev_amo_en, io.core.req.amo_en)
+    val cur_amo_op = Mux(cur_locked, prev_amo_op, io.core.req.amo_op)
 
     val byte_masks = Seq(
         0.U(4.W) -> "b0001".U(4.W),
@@ -151,14 +160,26 @@ class DMem extends Module {
 
     // ---------- AMO ----------
     val amo = Module(new AMO)
+    amo.io.request := cur_amo_en
+    amo.io.req.addr := cur_addr
+    amo.io.req.rs2_data := cur_wr_data
+    amo.io.req.amo_op := cur_amo_op
+    amo.io.bus.res := io.bus.res
+
+    amo_locked := amo.io.res.locked
     // TODO: link AMO module into DMem
 
-    io.bus.req.sel := mask
-    io.bus.req.wen := cur_wr_en && (!addr_err)
-    io.bus.req.ren := cur_rd_en && (!addr_err)
-    io.bus.req.en := cur_en && (!addr_err)
-    io.bus.req.addr := cur_addr
-    io.bus.req.data_wr := wr_data
+    when (!cur_amo_en) {
+        io.bus.req.sel := mask
+        io.bus.req.wen := cur_wr_en && (!addr_err)
+        io.bus.req.ren := cur_rd_en && (!addr_err)
+        io.bus.req.en := cur_en && (!addr_err)
+        io.bus.req.addr := cur_addr
+        io.bus.req.data_wr := wr_data
+    }
+    .otherwise {
+        io.bus.req := amo.io.bus.req
+    }
 
     val bus_data = io.bus.res.data_rd
     val byte_data = MuxLookup(prev_mask, 0.U(8.W), Seq(
@@ -178,12 +199,18 @@ class DMem extends Module {
         MEM_H -> Cat(Fill(16, hword_data(15)), hword_data(15, 0)),
         MEM_HU -> Cat(Fill(16, 0.U(1.W)), hword_data(15, 0))
     ))
-    io.core.res.rd_data := Mux(prev_sc_en, Mux(prev_sc_valid, 0.U(32.W), 1.U(32.W)),
-        Mux(prev_rd_en, ext_data, 0.U(32.W)))
 
-    io.core.res.locked := io.bus.res.locked
-    io.core.res.expt.wr_addr_invalid_expt := prev_wr_en && prev_addr_err
-    io.core.res.expt.wr_access_err_expt := prev_wr_en && (!prev_addr_err) && io.bus.res.err
+    when (!prev_amo_en) {
+        io.core.res.rd_data := Mux(prev_sc_en, Mux(prev_sc_valid, 0.U(32.W), 1.U(32.W)),
+            Mux(prev_rd_en, ext_data, 0.U(32.W)))
+    }
+    .otherwise {
+        io.core.res.rd_data := amo.io.res.data
+    }
+
+    io.core.res.locked := cur_locked
+    io.core.res.expt.wr_addr_invalid_expt := (prev_wr_en || prev_amo_en) && prev_addr_err
+    io.core.res.expt.wr_access_err_expt := (prev_wr_en || prev_amo_en) && (!prev_addr_err) && io.bus.res.err
     io.core.res.expt.rd_addr_invalid_expt := prev_rd_en && prev_addr_err
     io.core.res.expt.rd_access_err_expt := prev_rd_en && (!prev_addr_err) && io.bus.res.err
 }
