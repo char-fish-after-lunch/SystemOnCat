@@ -308,6 +308,7 @@ class Datapath() extends Module {
     // tricky. 
 
     io.dmem.req.mem_type := ex_ctrl_sigs.mem_type
+    io.dmem.req.amo_op := ex_ctrl_sigs.amo_op
 
     when (!mem_replay && !ex_replay) {
         mem_reg_expt := ex_reg_expt && ex_reg_valid

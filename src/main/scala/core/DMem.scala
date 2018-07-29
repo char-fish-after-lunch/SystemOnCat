@@ -11,6 +11,7 @@ class DMemRequest extends Bundle {
     val lr_en = Input(Bool())
     val sc_en = Input(Bool())
     val mem_type = Input(Bits(MEM_X.getWidth.W))
+    val amo_op = Input(Bits(AMO_OP.AMO_X.getWidth.W))
 }
 
 class DMemExceptions extends Bundle {
@@ -49,6 +50,7 @@ import AtomicConsts._
 class DMem extends Module {
     val io = IO(new DMemIO)
 
+    // -------- LR & SC --------
     val lr_valid_counter = RegInit(UInt(), 0.U(LoadReservationCycles.getWidth.W))
     // lr_valid_counter == 0: no addr is reserved
     // else: a LR has been waiting for x cycles
@@ -69,6 +71,7 @@ class DMem extends Module {
     val sc_valid = io.core.req.sc_en && lr_valid && lr_reserved_addr === io.core.req.addr
     // reservation is valid, store conditional succeeded
 
+    // -------- Sysbus --------
     val en = io.core.req.sc_en || io.core.req.rd_en || io.core.req.wr_en
 
     val prev_wr_data = RegInit(0.U(32.W))
@@ -145,6 +148,10 @@ class DMem extends Module {
         MEM_W -> (cur_addr(1, 0) =/= 0.U(2.W)) // full word r/w: must be 4-aligned
     ))
     prev_addr_err := addr_err
+
+    // ---------- AMO ----------
+    val amo = Module(new AMO)
+    // TODO: link AMO module into DMem
 
     io.bus.req.sel := mask
     io.bus.req.wen := cur_wr_en && (!addr_err)
