@@ -18,8 +18,19 @@ class SoCIO extends Bundle {
 class SystemOnCat extends Module {
     val io = IO(new SoCIO)
 
+    
+    val not_to_cache = Seq(
+        BitPat("b00000000011111111111111111111???"),
+        BitPat("b000000000111111111111111110?????"),
+        BitPat("b000000000111111111111111110?????"),
+        BitPat("b00000000011111111111111111110???"),
+        BitPat("b0000000001111111111111111110????"),
+        BitPat("b11111111111111111111111111??????")
+    )
+
+
     // --------- Cores ----------
-    val core1 = Module(new Core())
+    val core1 = Module(new Core(not_to_cache))
     io.devs <> core1.io.devs
 
     // -------- Device ----------

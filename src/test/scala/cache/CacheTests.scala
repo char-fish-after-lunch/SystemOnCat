@@ -9,9 +9,9 @@ class CacheTester(c: => Cache) extends BasicTester {
 
     // adr_i, we_i, cyc_i, stb_i
     val inputSeq = Seq(
-        (0x2000.U(32.W), true.B, true.B, true.B),
-        (0x2000.U(32.W), true.B, true.B, true.B),
         (0x3000.U(32.W), false.B, true.B, true.B),
+        (0x2000.U(32.W), true.B, true.B, true.B),
+        (0x2000.U(32.W), true.B, true.B, true.B),
         (0x3000.U(32.W), false.B, true.B, true.B),
         (0x3000.U(32.W), false.B, true.B, true.B),
         (0x2000.U(32.W), false.B, true.B, true.B),
@@ -40,13 +40,13 @@ class CacheTester(c: => Cache) extends BasicTester {
     cache.io.bus.slave.we_i := test_we_i(cntr)
     cache.io.bus.slave.cyc_i := test_cyc_i(cntr)
     cache.io.bus.slave.stb_i := test_stb_i(cntr)
-    cache.io.bus.master.stall_i := false.B
-    cache.io.bus.master.rty_i := false.B
-    cache.io.bus.master.err_i := false.B
-    cache.io.bus.master.ack_i := true.B
+    cache.io.bus.master.stall_o := false.B
+    cache.io.bus.master.rty_o := false.B
+    cache.io.bus.master.err_o := false.B
+    cache.io.bus.master.ack_o := true.B
     cache.io.bus.slave.dat_i := 0.U(32.W)
     cache.io.bus.slave.sel_i := 15.U(4.W)
-    cache.io.bus.master.dat_i := 103.U(32.W)
+    cache.io.bus.master.dat_o := 103.U(32.W)
 
     printf("dat_o = %d, ack = %d, stall = %d\n", cache.io.bus.slave.dat_o, cache.io.bus.slave.ack_o, 
         cache.io.bus.slave.stall_o)
@@ -60,6 +60,6 @@ class CacheTester(c: => Cache) extends BasicTester {
 
 class CacheTests extends org.scalatest.FlatSpec {
   "CacheTests" should "pass" in {
-    assert(TesterDriver execute (() => new CacheTester(new Cache(2, 1, 8))))
+    assert(TesterDriver execute (() => new CacheTester(new Cache(2, 2, 1, Seq()))))
   }
 }

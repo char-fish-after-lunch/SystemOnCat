@@ -90,7 +90,7 @@ class MMUWrapper extends Module {
     io.bus_request.adr_i := Mux(tlb.io.valid, tlb.io.paddr, ptw.io.mem.addr)
     io.bus_request.dat_i := Mux(tlb.io.valid, req_reg.data_wr, ptw.io.mem.addr)
     io.bus_request.sel_i := Mux(tlb.io.valid, req_reg.sel, "b1111".U(4.W))
-    io.bus_request.stb_i := Mux(tlb.io.valid, phase_1 || prev_cache_hit, ptw.io.mem.request)
+    io.bus_request.stb_i := Mux(tlb.io.valid, phase_1, ptw.io.mem.request)
     io.bus_request.cyc_i := true.B
     io.bus_request.we_i := Mux(tlb.io.valid, req_reg.wen, false.B) // ptw never writes
 
