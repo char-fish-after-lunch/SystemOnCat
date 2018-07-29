@@ -24,7 +24,7 @@ class CoreIO() extends Bundle {
     val bus_request = Flipped(new SysBusSlaveBundle)
 }
 
-class Core(not_to_cache : Seq[BitPat]) extends Module {
+class Core(not_to_cache : Seq[(BitPat, Bool)]) extends Module {
     val io = IO(new CoreIO)
     val dpath = Module(new Datapath) 
     val ctrl  = Module(new Control)
@@ -33,7 +33,7 @@ class Core(not_to_cache : Seq[BitPat]) extends Module {
 
     val bus_conn = Module(new SysBusConnector())
     val mmu = Module(new MMUWrapper())
-    val cache = Module(new Cache(2, 1, 6, not_to_cache))
+    val cache = Module(new Cache(2, 1, 1, not_to_cache))
 
     mmu.io.csr_info <> dpath.io.mmu_csr_info
     mmu.io.expt <> dpath.io.mmu_expt

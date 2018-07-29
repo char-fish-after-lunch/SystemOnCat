@@ -101,10 +101,10 @@ class MMUWrapper extends Module {
     assert(!(paddr_reg_accessing && ptw_reg_accessing)) // only 1 in 2 cases is allowed
 
     ptw.io.mem.data := Mux(ptw_reg_accessing, io.bus_request.dat_o, 0.U(32.W))
-    ptw.io.mem.valid := Mux(ptw_reg_accessing, !(io.bus_request.stall_o), false.B)
+    ptw.io.mem.valid := Mux(ptw_reg_accessing, (io.bus_request.ack_o), false.B)
 
     io.res.data_rd := Mux(paddr_reg_accessing, io.bus_request.dat_o, 0.U(32.W))
-    io.res.locked := !prev_cache_hit && (io.bus_request.stall_o || phase_1 || !(paddr_reg_accessing || paddr_reg_pagefault))
+    io.res.locked := !prev_cache_hit && (!io.bus_request.ack_o || phase_1 || !(paddr_reg_accessing || paddr_reg_pagefault))
     io.res.err :=  Mux(paddr_reg_accessing, io.bus_request.err_o, false.B)
 
 }
