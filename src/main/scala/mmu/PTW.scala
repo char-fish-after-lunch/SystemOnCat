@@ -3,7 +3,7 @@ package systemoncat.mmu
 import chisel3._
 import chisel3.util._
 import chisel3.Bits._
-import systemoncat.core.PRV._
+import systemoncat.core._
 
 class PTE extends Bundle{
 	val zero = UInt(MemoryConsts.PTEZero.W)
@@ -62,8 +62,8 @@ class PTW extends Module{
 	val vpn_2 = Reg(UInt(MemoryConsts.VPNLength2.W))
 	val mm_cmd = Reg(UInt(2.W))
 
-	val user_mode = (priv === PRV.U)
-	val machine_mode = (priv === PRV.M)
+	val user_mode = (io.priv === PRV.U)
+	val machine_mode = (io.priv === PRV.M)
 	//Level 1 PTE Check
 	val pte_1_valid = (state =/= s_wait1) | ((~temp_pte.X & ~temp_pte.W & ~temp_pte.R & temp_pte.V) & (temp_pte.U | machine_mode))
 	//Level 2 PTE Check
