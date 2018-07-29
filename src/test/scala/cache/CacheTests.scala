@@ -57,6 +57,8 @@ class CacheTester(c: => Cache) extends BasicTester {
 
 class CacheTests extends org.scalatest.FlatSpec {
   "CacheTests" should "pass" in {
-    assert(TesterDriver execute (() => new CacheTester(new Cache(2, 1, 1, Seq()))))
+    assert(TesterDriver execute (() => 
+        new CacheTester(new Cache(2, 1, 1, 
+            Seq(BitPat("b00000000000000000000000000000000") -> true.B)))))
   }
 }
