@@ -75,12 +75,13 @@ class MMUWrapper(map : Seq[(BitPat, UInt)], slaves : Seq[SysBusSlave]) extends M
     tlb.io.cmd := req_reg.cmd
     tlb.io.tlb_flush := io.csr_info.tlb_flush
     tlb.io.tlb_request := req_reg.wen | req_reg.ren
-
+    tlb.io.priv := io.csr_info.priv
     tlb.io.ptw <> ptw.io.tlb
 
     // ptw.io.mem
     ptw.io.baseppn := io.csr_info.base_ppn
     ptw.io.priv := io.csr_info.priv
+    
 
     val expt = Reg(new MMUException())
     expt := ptw.io.expt

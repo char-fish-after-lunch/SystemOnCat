@@ -40,4 +40,5 @@ object MemoryConsts{
 	//|------PPN(9)------|---RSW(2)---|D|A|G|U|X|W|R|V|
 	val RSWLength = 2
 	val PTEZero = 32 - PPNLength - RSWLength - 8
+	
 }

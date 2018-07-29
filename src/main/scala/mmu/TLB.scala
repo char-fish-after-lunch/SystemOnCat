@@ -2,10 +2,12 @@ package systemoncat.mmu
 
 import chisel3._
 import chisel3.util._
+import systemoncat.core._
 
 class TLBEntry extends Bundle{
 	val tag = UInt(MemoryConsts.TLBTagLength.W)
-	val ppn = UInt(MemoryConsts.PPNLength.W)
+	//val ppn = UInt(MemoryConsts.PPNLength.W)
+	val pte = new PTE()
 }
 
 class TLBIO extends Bundle{
@@ -16,9 +18,11 @@ class TLBIO extends Bundle{
 	val cmd = Input(UInt(2.W)) //Memory Command
 	val tlb_request = Input(Bool())
 	val tlb_flush = Input(Bool())
+	val priv = Input(UInt(2.W))
 
 	val paddr = Output(UInt(32.W))
 	val valid = Output(Bool())
+
 
 	//Page Fault Exception(Leave for PTW to solve)
 	//val iPF = Output(Bool())
@@ -52,17 +56,17 @@ class TLB extends Module{
 	}
 
 	//
-
+	def is_valid(pte_u: Bool, pte_x: Bool, pte_w: Bool, pte_r: Bool, cmd: UInt, prv: UInt): Bool = (pte_u | (prv === PRV.M)) & (pte_x | (cmd =/= MemoryConsts.PC)) & (pte_w | (cmd =/= MemoryConsts.Store)) & (pte_r | cmd === MemoryConsts.PC)
 	// TLB LookUp
 	val lookup_tag = Cat(io.asid, io.vaddr(31,17))
 	val page_offset = io.vaddr(11,0)
 	val lookup_index = io.vaddr(16,12)
-	val TLBHit = entries_valid(lookup_index) & (entries(lookup_index).tag === lookup_tag) & ~io.passthrough
+	val TLBHit = entries_valid(lookup_index) & (entries(lookup_index).tag === lookup_tag) & ~io.passthrough & is_valid(entries(lookup_index).pte.U, entries(lookup_index).pte.X, entries(lookup_index).pte.W, entries(lookup_index).pte.R, io.cmd, io.priv)
 	
 	when(TLBHit | io.passthrough){
 		printf("tlb hit\n")
 		io.paddr := MuxLookup(io.passthrough, 0.U(32.W), Seq(
-			false.B -> Cat(entries(lookup_index).ppn, page_offset),
+			false.B -> Cat(entries(lookup_index).pte.ppn, page_offset),
 			true.B -> io.vaddr
 		))
 		io.valid := true.B
@@ -77,9 +81,9 @@ class TLB extends Module{
 	when(do_refill & ~io.tlb_flush){
 		printf("TLB Start to Refill\n")
 		val waddr = refill_index
-		val refill_ppn = io.ptw.pte_ppn
+		val refill_pte = io.ptw.pte.asTypeOf(new PTE)
 		val newEntry = Wire(new TLBEntry)
-		newEntry.ppn := refill_ppn
+		newEntry.pte := refill_pte
 		newEntry.tag := refill_tag
 
 		entries_valid(refill_index) := true.B

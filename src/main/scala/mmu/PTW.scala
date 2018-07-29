@@ -19,6 +19,7 @@ class PTE extends Bundle{
 	val W = Bool()
 	val R = Bool()
 	val V = Bool()
+
 }
 
 class TLBPTWIO extends Bundle{
@@ -26,7 +27,7 @@ class TLBPTWIO extends Bundle{
 	val refill_request = Input(Bool())
 	val cmd = Input(UInt(2.W))
 
-	val pte_ppn = Output(UInt(MemoryConsts.PPNLength.W))
+	val pte = Output(UInt(32.W))
 	val ptw_finish = Output(Bool())
 	val ptw_valid = Output(Bool())
 	val pf = Output(Bool())
@@ -97,7 +98,7 @@ class PTW extends Module{
 
 	//finish logic
 	io.tlb.ptw_finish := page_fault | (state === s_wait2)
-	io.tlb.pte_ppn := temp_pte.ppn
+	io.tlb.pte := temp_pte.asUInt()
 
 	//valid logic
 	io.tlb.ptw_valid := (state === s_wait2) & (~page_fault)
