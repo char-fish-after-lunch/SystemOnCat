@@ -9,14 +9,24 @@ class CacheTester(c: => Cache) extends BasicTester {
 
     // adr_i, we_i, cyc_i, stb_i
     val inputSeq = Seq(
-        (0x0.U(32.W), false.B, true.B, true.B),
-        (0x4.U(32.W), false.B, true.B, true.B),
-        (0x8.U(32.W), false.B, true.B, true.B),
-        (0xc.U(32.W), false.B, true.B, true.B),
-        (0x10.U(32.W), false.B, true.B, true.B),
-        (0x14.U(32.W), false.B, true.B, true.B),
-        (0x18.U(32.W), false.B, true.B, true.B),
-        (0x1c.U(32.W), false.B, true.B, true.B),
+        (0x0.U(32.W), true.B, true.B, true.B),
+        (0x0.U(32.W), true.B, true.B, true.B),
+        (0x4.U(32.W), true.B, true.B, true.B),
+        (0x4.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0xc.U(32.W), true.B, true.B, true.B),
+        (0xc.U(32.W), true.B, true.B, true.B),
+        (0xc.U(32.W), true.B, true.B, true.B),
+        (0xc.U(32.W), true.B, true.B, true.B),
+        (0x0.U(32.W), true.B, true.B, true.B),
+        (0x0.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B)
     )
 
     val test_adr_i = VecInit(inputSeq.map(s => s._1))
@@ -40,13 +50,14 @@ class CacheTester(c: => Cache) extends BasicTester {
     cache.io.bus.master.rty_o := false.B
     cache.io.bus.master.err_o := false.B
     cache.io.bus.master.ack_o := true.B
-    cache.io.bus.slave.dat_i := 0.U(32.W)
+    cache.io.bus.slave.dat_i := last_adr + 2.U
     cache.io.bus.slave.sel_i := 15.U(4.W)
     cache.io.bus.master.dat_o := last_adr + 1.U
     last_adr := cache.io.bus.master.adr_i
 
-    printf("dat_o = %d, ack = %d, stall = %d, adr = %x\n", cache.io.bus.slave.dat_o, cache.io.bus.slave.ack_o, 
-        cache.io.bus.slave.stall_o, cache.io.bus.master.adr_i + 1.U)
+    printf("dat_o = %d, ack = %d, stall = %d, adr = %x, we = %d, dat = %d, stb = %d, sel = %d\n", cache.io.bus.slave.dat_o, cache.io.bus.slave.ack_o, 
+        cache.io.bus.slave.stall_o, cache.io.bus.master.adr_i, cache.io.bus.master.we_i, cache.io.bus.master.dat_i,
+        cache.io.bus.master.stb_i, cache.io.bus.master.sel_i)
 
     when(done) {
         stop()
@@ -58,7 +69,6 @@ class CacheTester(c: => Cache) extends BasicTester {
 class CacheTests extends org.scalatest.FlatSpec {
   "CacheTests" should "pass" in {
     assert(TesterDriver execute (() => 
-        new CacheTester(new Cache(2, 1, 1, 
-            Seq(BitPat("b00000000000000000000000000000000") -> true.B)))))
+        new CacheTester(new Cache(2, 1, 1, Seq()))))
   }
 }

@@ -119,7 +119,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     printf("current_state = %d\n", state)
     printf("valid = %d, %x, %x, %d, %d, %d, %d, %d, %d, %d\n", entry_valid, tag, getTag(index, way_index),
         isDirty(index, way_index), index, way_index, bus_stalled, blockSize.U, op_counter, bus_in_dat)
-    printf("adr = %x\n", cur_adr)
+    printf("adr = %x\n", adr)
 
     def writeEntry(_index : UInt, _way_index : UInt, _word_offset : UInt, _dat : UInt, _sel : UInt){
         val new_data = Vec(r_blocks(_index * wayCount.U + _way_index).toBools)
@@ -139,12 +139,14 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         adr_o := Cat(Seq(getTag(_index, _way_index), _index, _byte_offset))
         we_o := true.B
         cyc_o := true.B
+        sel_o := 0xf.U(4.W)
     }
 
     def readFromBus(_index : UInt, _tag : UInt, _byte_offset : UInt){
         adr_o := Cat(Seq(_tag, _index, _byte_offset))
         we_o := false.B
         cyc_o := true.B
+        sel_o := 0xf.U(4.W)
     }
 
     def endBusTransaction(){
@@ -176,7 +178,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             }.otherwise{
                 val vacant_way_index = getVacantWay(index)
                 when(!isValid(index, vacant_way_index) || !isDirty(index, next_victim)){
-                    printf("good %d %d %d!\n", index, vacant_way_index, next_victim)
+                    printf("good %d %d %d %d!\n", index, vacant_way_index, next_victim, isDirty(index, next_victim))
                     val n_way_index = Mux(isValid(index, vacant_way_index), next_victim, vacant_way_index)
 
                     // happily, a vacant slot found
@@ -197,7 +199,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
 
                 }.otherwise{
                     // writeback necessary
-                    writeToBus(cur_index, next_victim, 0.U(blockWidth.W))
+                    writeToBus(index, next_victim, 0.U(blockWidth.W))
 
                     state := STATE_WRITE_BACK
                     cur_way_index := next_victim
@@ -205,10 +207,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
                     if(wayCount != 1){
                         next_victim := next_victim + 1.U
                     }
-
-                    isValid(index, next_victim) := true.B
-                    isDirty(index, next_victim) := false.B
-                    getTag(index, next_victim) := tag
+                    op_counter := Mux(bus_stalled, 0.U, 1.U)
                 }
             }
         }.elsewhen(we){
@@ -233,6 +232,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
                 isDirty(cur_index, cur_way_index) := false.B
                 op_counter := 0.U
                 when(cur_we){
+                    printf("hoola!\n")
                     writeEntry(cur_index, cur_way_index, Cat(cur_adr(31, 2), 0.U(2.W))(blockWidth - 1, 0), 
                         cur_dat, cur_sel)
                 }
@@ -245,11 +245,11 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             writeToBus(cur_index, cur_way_index, Cat(op_counter, 0.U(2.W))(blockWidth - 1, 0))
             op_counter := next_counter
         }.otherwise{
-            readFromBus(cur_index, cur_way_index, 0.U(blockWidth.W))
-            when(bus_ack){
-                state := STATE_FETCH
-                op_counter := Mux(bus_stalled, 0.U, 1.U)
-            }
+            isValid(index, cur_way_index) := true.B
+            getTag(index, cur_way_index) := cur_tag
+            readFromBus(cur_index, cur_tag, 0.U(blockWidth.W))
+            state := STATE_FETCH
+            op_counter := Mux(bus_stalled, 0.U, 1.U)
         }
     }.elsewhen(state === STATE_DIRECT_ACCESS){
         val next_counter = Mux(bus_stalled, op_counter, op_counter + 1.U)
@@ -279,7 +279,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     io.bus.slave.stall_o := false.B
     io.bus.slave.dat_o := Mux(state === STATE_IDLE, 
         getData(index, way_index, offset << 3.U, 32),
-        Mux((cur_offset + 4.U)(blockWidth - 1, 0) === 0.U || direct_access, 
+        Mux((cur_offset + 4.U)(blockWidth - 1, 0) === 0.U || state === STATE_DIRECT_ACCESS, 
             bus_in_dat,
             getData(cur_index, cur_way_index, cur_offset << 3.U, 32),
             ))
