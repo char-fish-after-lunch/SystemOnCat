@@ -30,8 +30,9 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     def isValid(_index : UInt, _way_index : UInt) : Bool = r_valids(_index * wayCount.U + _way_index)
     def getTag(_index : UInt, _way_index: UInt) : UInt = r_tags(_index * wayCount.U + _way_index)
     def isDirty(_index : UInt, _way_index : UInt) : Bool = r_dirtys(_index * wayCount.U + _way_index)
+    def getData(_index : UInt, _way_index : UInt) : UInt = r_blocks(_index * wayCount.U + _way_index)
     def getData(_index : UInt, _way_index : UInt, _bit_offset : UInt, _bit_count : Int) : UInt = {
-        (r_blocks(_index * wayCount.U + _way_index) >> _bit_offset)(_bit_count - 1, 0)
+        (getData(_index, _way_index) >> _bit_offset)(_bit_count - 1, 0)
     }
 
     def getWayIndex(_index: UInt, _tag: UInt) : UInt = {
@@ -81,7 +82,6 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     val cur_tag = cur_adr(31, tagStart)
     val cur_offset = (cur_adr(indexStart - 1, 0) & ~3.U)(indexStart - 1, 0)
     val cur_way_index = RegInit(UInt(log2Up(wayCount).W), 0.U)   
-    val cur_entry_valid = isEntryValid(cur_index, cur_tag, cur_way_index)
     val cur_dat = RegInit(UInt(32.W), 0.U)
     val cur_sel = RegInit(UInt(4.W), 0.U)
     val cur_we = RegInit(Bool(), false.B)
@@ -102,9 +102,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     val dat_o = Wire(UInt(32.W))
     val sel_o = Wire(UInt(4.W))
 
-    val op_counter = RegInit(UInt((blockWidth - 1).W), 0.U)
-
-    val fetch_ans = RegInit(UInt(32.W), 0.U)
+    val op_counter = RegInit(UInt((blockWidth).W), 0.U)
 
     adr_o := 0.U
     cyc_o := false.B
@@ -121,28 +119,37 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         isDirty(index, way_index), index, way_index, bus_stalled, blockSize.U, op_counter, bus_in_dat)
     printf("adr = %x\n", adr)
 
-    def writeEntry(_index : UInt, _way_index : UInt, _word_offset : UInt, _dat : UInt, _sel : UInt){
-        val new_data = Vec(r_blocks(_index * wayCount.U + _way_index).toBools)
+    def writeMasked(_dat : UInt, _sel : UInt, _new_dat : UInt, _word_offset : UInt) : UInt = {
+        val new_data = Vec(_dat.toBools)
         for(i <- 0 until 4){
             when(_sel(i)){
                 for(j <- 0 until 8){
-                    new_data((((_word_offset << 2.U) + i.U) << 3.U) + j.U) := _dat((i << 3) + j)
+                    new_data((((_word_offset << 2.U) + i.U) << 3.U) + j.U) := _new_dat((i << 3) + j)
                 }
             }
         }
-        r_blocks(_index * wayCount.U + _way_index) := new_data.asUInt()
+        new_data.asUInt()
+    }
+
+    def writeEntry(_index : UInt, _way_index : UInt, _word_offset : UInt, _dat : UInt, _sel : UInt){
+        r_blocks(_index * wayCount.U + _way_index) := writeMasked(r_blocks(_index * wayCount.U + _way_index), 
+            _sel, _dat, 
+            _word_offset)
         r_dirtys(_index * wayCount.U + _way_index) := true.B 
     }
 
     def writeToBus(_index : UInt, _way_index : UInt, _byte_offset : UInt){
         dat_o := getData(_index, _way_index, _byte_offset << 3.U, 32)
         adr_o := Cat(Seq(getTag(_index, _way_index), _index, _byte_offset))
+        assert(Cat(Seq(getTag(_index, _way_index), _index, _byte_offset)).getWidth == 32)
+
         we_o := true.B
         cyc_o := true.B
         sel_o := 0xf.U(4.W)
     }
 
     def readFromBus(_index : UInt, _tag : UInt, _byte_offset : UInt){
+        assert(Cat(Seq(_tag, _index, _byte_offset)).getWidth == 32)
         adr_o := Cat(Seq(_tag, _index, _byte_offset))
         we_o := false.B
         cyc_o := true.B
@@ -216,25 +223,27 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     }.elsewhen(state === STATE_FETCH){
         val next_counter = Mux(bus_stalled, op_counter, op_counter + 1.U)
 
-        when(!bus_stalled && op_counter > 0.U){
-            writeEntry(cur_index, cur_way_index, (op_counter - 1.U) << 2.U, bus_in_dat, 0xf.U(4.W))
-        }
-
         when(op_counter < blockSize.U){
+            when(!bus_stalled && op_counter > 0.U){
+                writeEntry(cur_index, cur_way_index, (op_counter - 1.U) << 2.U, bus_in_dat, 0xf.U(4.W))
+            }
             readFromBus(cur_index, cur_tag, Cat(op_counter, 0.U(2.W))(blockWidth - 1, 0))
             op_counter := next_counter
         }.otherwise{
             endBusTransaction()
             when(bus_ack){
-                writeEntry(cur_index, cur_way_index, (op_counter - 1.U) << 2.U, bus_in_dat, 0xf.U(4.W))
+                val dat = writeMasked(getData(cur_index, cur_way_index), 0xf.U(4.W), bus_in_dat, (op_counter - 1.U) << 2.U)
                 state := STATE_IDLE
                 fetch_done := true.B
                 isDirty(cur_index, cur_way_index) := false.B
                 op_counter := 0.U
                 when(cur_we){
                     printf("hoola!\n")
-                    writeEntry(cur_index, cur_way_index, Cat(cur_adr(31, 2), 0.U(2.W))(blockWidth - 1, 0), 
-                        cur_dat, cur_sel)
+                    val dat_new = writeMasked(dat, cur_sel, cur_dat, Cat(cur_adr(31, 2), 0.U(2.W))(blockWidth - 1, 0))
+                    getData(cur_index, cur_way_index) := dat_new
+                    isDirty(cur_index, cur_way_index) := true.B
+                }.otherwise{
+                    getData(cur_index, cur_way_index) := dat
                 }
             }
         }
@@ -245,8 +254,8 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             writeToBus(cur_index, cur_way_index, Cat(op_counter, 0.U(2.W))(blockWidth - 1, 0))
             op_counter := next_counter
         }.otherwise{
-            isValid(index, cur_way_index) := true.B
-            getTag(index, cur_way_index) := cur_tag
+            isValid(cur_index, cur_way_index) := true.B
+            getTag(cur_index, cur_way_index) := cur_tag
             readFromBus(cur_index, cur_tag, 0.U(blockWidth.W))
             state := STATE_FETCH
             op_counter := Mux(bus_stalled, 0.U, 1.U)

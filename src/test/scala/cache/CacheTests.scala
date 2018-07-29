@@ -9,23 +9,21 @@ class CacheTester(c: => Cache) extends BasicTester {
 
     // adr_i, we_i, cyc_i, stb_i
     val inputSeq = Seq(
+        (0x0.U(32.W), false.B, true.B, true.B),
+        (0x0.U(32.W), false.B, true.B, true.B),
+        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x8.U(32.W), false.B, true.B, true.B),
+        (0x8.U(32.W), false.B, true.B, true.B),
+        (0x8.U(32.W), false.B, true.B, true.B),
+        (0x8.U(32.W), false.B, true.B, true.B),
+        (0x0.U(32.W), false.B, true.B, true.B),
+        (0x0.U(32.W), false.B, true.B, true.B),
+        (0x0.U(32.W), false.B, true.B, true.B),
         (0x0.U(32.W), true.B, true.B, true.B),
         (0x0.U(32.W), true.B, true.B, true.B),
         (0x4.U(32.W), true.B, true.B, true.B),
         (0x4.U(32.W), true.B, true.B, true.B),
-        (0x8.U(32.W), true.B, true.B, true.B),
-        (0x8.U(32.W), true.B, true.B, true.B),
-        (0x8.U(32.W), true.B, true.B, true.B),
-        (0xc.U(32.W), true.B, true.B, true.B),
-        (0xc.U(32.W), true.B, true.B, true.B),
-        (0xc.U(32.W), true.B, true.B, true.B),
-        (0xc.U(32.W), true.B, true.B, true.B),
-        (0x0.U(32.W), true.B, true.B, true.B),
-        (0x0.U(32.W), true.B, true.B, true.B),
-        (0x8.U(32.W), true.B, true.B, true.B),
-        (0x8.U(32.W), true.B, true.B, true.B),
-        (0x8.U(32.W), true.B, true.B, true.B),
-        (0x8.U(32.W), true.B, true.B, true.B),
+        (0x4.U(32.W), true.B, true.B, true.B),
         (0x8.U(32.W), true.B, true.B, true.B)
     )
 
@@ -51,11 +49,15 @@ class CacheTester(c: => Cache) extends BasicTester {
     cache.io.bus.master.err_o := false.B
     cache.io.bus.master.ack_o := true.B
     cache.io.bus.slave.dat_i := last_adr + 2.U
-    cache.io.bus.slave.sel_i := 15.U(4.W)
-    cache.io.bus.master.dat_o := last_adr + 1.U
+    cache.io.bus.slave.sel_i := "b0001".U(4.W)
+    cache.io.bus.master.dat_o := Lookup(last_adr, last_adr + 1.U, Seq(
+        BitPat("b00000000000000000000000000000000") -> 0xfffffff.U(32.W)
+    ))
     last_adr := cache.io.bus.master.adr_i
 
-    printf("dat_o = %d, ack = %d, stall = %d, adr = %x, we = %d, dat = %d, stb = %d, sel = %d\n", cache.io.bus.slave.dat_o, cache.io.bus.slave.ack_o, 
+    printf("dat_o = %d, dat_i = %d, ack = %d, stall = %d, adr = %x, we = %d, dat = %d, stb = %d, sel = %d\n", cache.io.bus.slave.dat_o, 
+        cache.io.bus.slave.dat_i,
+        cache.io.bus.slave.ack_o, 
         cache.io.bus.slave.stall_o, cache.io.bus.master.adr_i, cache.io.bus.master.we_i, cache.io.bus.master.dat_i,
         cache.io.bus.master.stb_i, cache.io.bus.master.sel_i)
 
