@@ -22,6 +22,9 @@ nop
 nop
 nop
 nop
+loopp:
+nop
+j loopp
 
 vaddr:
     .word 0x3000

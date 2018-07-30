@@ -4,6 +4,7 @@ import chisel3._
 import chisel3.util._
 import systemoncat.sysbus._
 import systemoncat.mmu._
+import systemoncat.cache.Cache
 import systemoncat.devices.ROM
 import systemoncat.devices.PLICInterface
 
@@ -23,7 +24,7 @@ class CoreIO() extends Bundle {
     val bus_request = Flipped(new SysBusSlaveBundle)
 }
 
-class Core() extends Module {
+class Core(not_to_cache : Seq[(BitPat, Bool)]) extends Module {
     val io = IO(new CoreIO)
     val dpath = Module(new Datapath) 
     val ctrl  = Module(new Control)
@@ -32,6 +33,7 @@ class Core() extends Module {
 
     val bus_conn = Module(new SysBusConnector())
     val mmu = Module(new MMUWrapper())
+    val cache = Module(new Cache(3, 2, 4, not_to_cache))
 
     mmu.io.csr_info <> dpath.io.mmu_csr_info
     mmu.io.expt <> dpath.io.mmu_expt
@@ -50,6 +52,6 @@ class Core() extends Module {
 
     io.ext_irq_r <> dpath.io.ext_irq_r
 
-    mmu.io.bus_request <> io.bus_request
-
+    mmu.io.bus_request <> cache.io.bus.slave
+    cache.io.bus.master <> io.bus_request
 }
