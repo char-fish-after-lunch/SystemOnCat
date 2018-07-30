@@ -3,6 +3,11 @@
 .global _start
 # load 4KB data (starting from adr 0)
 _start:
+csrr a1, mhartid
+is_core1:
+nop
+bnez a1, is_core1
+
 li a1, 0
 li a2, 4096
 li a3, ADR_FLASH
