@@ -86,10 +86,10 @@ class DMem extends Module {
     val prev_mask = RegInit(0.U(4.W))
     val prev_addr_err = RegInit(false.B)
     val prev_amo_en = RegInit(false.B)
-    val prev_amo_op = RegInit(false.B)
+    val prev_amo_op = RegInit(AMO_OP.AMO_X)
 
     val amo_locked = Wire(Bool())
-    val cur_locked = !io.bus.res.locked || amo_locked
+    val cur_locked = io.bus.res.locked || amo_locked
     when (!cur_locked) {
         prev_wr_data := io.core.req.wr_data
         prev_addr := io.core.req.addr

@@ -39,7 +39,7 @@ class ControlSignals() extends Bundle() {
     val mul = Bool()                       // is mul
     val div = Bool()                       // is div
     val branch = Bool()                    // is branch
-    val amo_op = Bool()                    // amo op
+    val amo_op = Bits(AMO_X.getWidth.W)                    // amo op
 }
 
 object Decoder {

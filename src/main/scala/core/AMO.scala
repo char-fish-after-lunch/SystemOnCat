@@ -52,14 +52,13 @@ class AMO extends Module {
 
     val cur_request = RegInit(0.U.asTypeOf(new AMORequest()))
     val cur_loaded_data = RegInit(UInt(), 0.U(32.W))
-    val cur_wr_data = RegInit(UInt(), 0.U(32.W))
 
     io.bus.req.addr := cur_request.addr
-    io.bus.req.data_wr := cur_wr_data
+    io.bus.req.data_wr := amoalu.io.out
     io.bus.req.sel := 15.U(4.W)
-    io.bus.req.ren := false.B
-    io.bus.req.wen := false.B
-    io.bus.req.en := locked
+    io.bus.req.ren := state === sLOAD
+    io.bus.req.wen := state === sSTORE
+    io.bus.req.en := locked || io.request
 
     amoalu.io.cmd := cur_request.amo_op
     amoalu.io.op1 := cur_loaded_data
@@ -75,8 +74,6 @@ class AMO extends Module {
         }
         is(sLOAD) {
             state := sLOAD_WAIT
-            io.bus.req.ren := true.B
-            io.bus.req.wen := false.B
         }
         is(sLOAD_WAIT) {
             when (io.bus.res.err) {
@@ -88,9 +85,6 @@ class AMO extends Module {
             }
         }
         is(sSTORE) {
-            cur_wr_data := amoalu.io.out
-            io.bus.req.ren := false.B
-            io.bus.req.wen := true.B
             state := sSTORE_WAIT
         }
         is(sSTORE_WAIT) {
@@ -104,7 +98,11 @@ class AMO extends Module {
     }
     io.res.locked := locked
     io.res.data := cur_loaded_data
-    
+    printf("----------------------------- state: %d\n", state)
+    printf("[request]  addr: %x, data_wr: %x, ren: %d, wen: %d, en: %d\n", io.bus.req.addr, io.bus.req.data_wr, io.bus.req.ren, io.bus.req.wen, io.bus.req.en)
+    printf("[response] locked: %d, data_rd: %x\n", io.bus.res.locked, io.bus.res.data_rd)
+    printf("[input]    request: %d, addr: %x, rs2_data: %x\n", io.request, io.req.addr, io.req.rs2_data)
+    printf("[output]   locked: %d, data: %x\n", io.res.locked, io.res.data)
 }
 
 class AMOALUIO extends Bundle {

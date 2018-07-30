@@ -1,4 +1,4 @@
-prog= lr_sc
+prog= lr_sc amo_ops
 
 ifndef MARCH
 MARCH:=rv32ia
