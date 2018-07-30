@@ -25,7 +25,7 @@ class SystemOnCat extends Module {
         BitPat("b000000000111111111111111100?????") -> true.B,
         BitPat("b00000000011111111111111111110???") -> true.B,
         BitPat("b0000000001111111111111111110????") -> true.B,
-        BitPat("b11111111111111111111111111??????") -> true.B
+        BitPat("b1111111111111111111111111???????") -> true.B
         // BitPat("b????????????????????????????????") -> true.B
     )
 
@@ -33,6 +33,8 @@ class SystemOnCat extends Module {
     // --------- Cores ----------
     val core0 = Module(new Core(0, not_to_cache))
     val core1 = Module(new Core(1, not_to_cache))
+    core0.io.store_info.in <> core1.io.store_info.out
+    core1.io.store_info.in <> core0.io.store_info.out
     io.devs.out_devs <> core0.io.devs.out_devs
     io.devs.in_devs <> core0.io.devs.in_devs
     io.devs.in_devs <> core1.io.devs.in_devs
@@ -68,7 +70,7 @@ class SystemOnCat extends Module {
         BitPat("b000000000111111111111111100?????") -> 4.U(3.W),
         BitPat("b00000000011111111111111111110???") -> 5.U(3.W),
         BitPat("b0000000001111111111111111110????") -> 6.U(3.W),
-        BitPat("b11111111111111111111111111??????") -> 7.U(3.W)
+        BitPat("b1111111111111111111111111???????") -> 7.U(3.W)
     )
 
     val bus_slaves: Seq[SysBusSlave] = Array(

@@ -36,6 +36,7 @@ class DMemCoreIO extends Bundle {
 class DMemIO extends Bundle {
     val core = new DMemCoreIO
     val bus = Flipped(new SysBusBundle)
+    val wr_info = new CoreStoreOpInfo
 }
 
 object AtomicConsts {
@@ -64,10 +65,15 @@ class DMem extends Module {
         lr_reserved_addr := io.core.req.addr
     }
 
+    io.wr_info.out.wen := io.core.req.wr_en
+    io.wr_info.out.addr := io.core.req.addr
+
     lr_valid_counter := Mux(io.core.req.wr_en && io.core.req.addr === lr_reserved_addr, 0.U,
-        Mux(io.core.req.lr_en, 1.U,
+        Mux(io.core.req.lr_en, Mux((io.core.req.addr === io.wr_info.in.addr) && io.wr_info.in.wen, 0.U, 1.U), 
+            // if core 0 LR & core 1 STORE happens at the same time, core 0 LR is invalid
+        Mux(io.wr_info.in.wen && io.wr_info.in.addr === lr_reserved_addr, 0.U,
         Mux(lr_valid_counter === LoadReservationCycles, 0.U,
-        Mux(lr_valid_counter === 0.U, 0.U, lr_valid_counter + 1.U))))
+        Mux(lr_valid_counter === 0.U, 0.U, lr_valid_counter + 1.U)))))
 
     val sc_valid = io.core.req.sc_en && lr_valid && lr_reserved_addr === io.core.req.addr
     // reservation is valid, store conditional succeeded
