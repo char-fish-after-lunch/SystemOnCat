@@ -15,7 +15,7 @@ class DatapathIO() extends Bundle {
     val ext_irq_r = Input(Bool())
 }
 
-class Datapath() extends Module {
+class Datapath(CoreID: Int) extends Module {
     val io = IO(new DatapathIO())
 
     val ex_ctrl_sigs = RegInit(0.U.asTypeOf(new ControlSignals))
@@ -340,7 +340,7 @@ class Datapath() extends Module {
     mem_functioning := mem_reg_valid && (!mem_expt) && (!mem_replay)
 
     // ---------- CSR & Interrupt Client -----------
-    val csr = Module(new CSRFile)
+    val csr = Module(new CSRFile(CoreID))
 
     val last_valid_pc_from_wb = Mux(mem_reg_valid, mem_reg_pc, 
         Mux(ex_reg_valid, ex_reg_pc, 
@@ -465,7 +465,7 @@ class Datapath() extends Module {
 
     // temporary init
     // io.debug_devs.leds := alu.io.out
-    io.debug_devs.leds := MuxLookup(io.debug_devs.dip_sw(1, 0), io.imem.inst, Seq(
+    io.debug_devs.out_devs.leds := MuxLookup(io.debug_devs.in_devs.dip_sw(1, 0), io.imem.inst, Seq(
         1.U -> io.dmem.req.addr(15, 0), 
         2.U -> Cat(io.dmem.res.rd_data(7, 0), io.dmem.req.wr_data(7, 0)),
         3.U -> Cat(pc_reg_valid, id_reg_valid, ex_reg_valid, mem_reg_valid,
@@ -473,8 +473,8 @@ class Datapath() extends Module {
             cur_mem_interp, prev_mem_interp, mem_has_exception, io.ext_irq_r,
             io.irq_client.tmr_irq_r, csr_branch, mem_reg_replay, mem_replay)
     ))
-    io.debug_devs.dpy0 := pc(7, 0)
-    io.debug_devs.dpy1 := npc(7, 0)
+    io.debug_devs.out_devs.dpy0 := pc(7, 0)
+    io.debug_devs.out_devs.dpy1 := npc(7, 0)
 
 
 

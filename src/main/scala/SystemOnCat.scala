@@ -19,14 +19,18 @@ class SystemOnCat extends Module {
     val io = IO(new SoCIO)
 
     // --------- Cores ----------
-    val core1 = Module(new Core())
-    io.devs <> core1.io.devs
+    val core0 = Module(new Core(0))
+    val core1 = Module(new Core(1))
+    io.devs.out_devs <> core0.io.devs.out_devs
+    io.devs.in_devs <> core0.io.devs.in_devs
+    io.devs.in_devs <> core1.io.devs.in_devs
 
     // -------- Device ----------
     val ram_slave = Module(new RAMSlaveReflector())
     val ram2_slave = Module(new RAMSlaveReflector())
     val serial_slave = Module(new SerialPortSlaveReflector())
     val flash_slave = Module(new FlashSlaveReflector())
+    val irq_client0 = Module(new Client)
     val irq_client1 = Module(new Client)
     val plic = Module(new PLIC)
     val rom = Module(new ROM("prog/firmware/mastercat.bin"))
@@ -39,23 +43,27 @@ class SystemOnCat extends Module {
     val bridge = Wire(new PLICIO)
     bridge <> plic.io.in
     io.plic_interface <> bridge.external
+    bridge.core0_ext_irq_r <> core0.io.ext_irq_r
     bridge.core1_ext_irq_r <> core1.io.ext_irq_r
 
+    core0.io.irq_client <> irq_client0.io.in
     core1.io.irq_client <> irq_client1.io.in
 
     val bus_map = Seq(
         BitPat("b0000000000??????????????????????") -> 1.U(3.W),
         BitPat("b00000000011111111111111111111???") -> 2.U(3.W),
-        BitPat("b000000000111111111111111110?????") -> 3.U(3.W),
-        BitPat("b00000000011111111111111111110???") -> 4.U(3.W),
-        BitPat("b0000000001111111111111111110????") -> 5.U(3.W),
-        BitPat("b11111111111111111111111111??????") -> 6.U(3.W)
+        BitPat("b000000000111111111111111100?????") -> 3.U(3.W),
+        BitPat("b000000000111111111111111110?????") -> 4.U(3.W),
+        BitPat("b00000000011111111111111111110???") -> 5.U(3.W),
+        BitPat("b0000000001111111111111111110????") -> 6.U(3.W),
+        BitPat("b11111111111111111111111111??????") -> 7.U(3.W)
     )
 
     val bus_slaves: Seq[SysBusSlave] = Array(
         ram_slave,
         ram2_slave,
         serial_slave,
+        irq_client0,
         irq_client1,
         plic,
         flash_slave,
@@ -63,18 +71,20 @@ class SystemOnCat extends Module {
     )
 
     // ------- Connector --------
-    val arbitor = Module(new SysBusArbiter(1))
-    arbitor.io.in(0) <> core1.io.bus_request
+    val arbitor = Module(new SysBusArbiter(2))
+    arbitor.io.in(0) <> core0.io.bus_request
+    arbitor.io.in(1) <> core1.io.bus_request
 
     val translator = Module(new SysBusTranslator(bus_map, bus_slaves))
 
-    ram_slave.io.out <> translator.io.in(0)
-    ram2_slave.io.out <> translator.io.in(1)
+    ram_slave.io.out    <> translator.io.in(0)
+    ram2_slave.io.out   <> translator.io.in(1)
     serial_slave.io.out <> translator.io.in(2)
-    irq_client1.io.out <> translator.io.in(3)
-    plic.io.out <> translator.io.in(4)
-    flash_slave.io.out <> translator.io.in(5)
-    rom.io.out <> translator.io.in(6)
+    irq_client0.io.out  <> translator.io.in(3)
+    irq_client1.io.out  <> translator.io.in(4)
+    plic.io.out         <> translator.io.in(5)
+    flash_slave.io.out  <> translator.io.in(6)
+    rom.io.out          <> translator.io.in(7)
 
     arbitor.io.out <> translator.io.out
 

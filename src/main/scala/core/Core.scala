@@ -7,13 +7,21 @@ import systemoncat.mmu._
 import systemoncat.devices.ROM
 import systemoncat.devices.PLICInterface
 
-class DebugDevicesIO() extends Bundle {
-    // unimportant devices, e.g: leds, buttons
+class DebugDevicesInput() extends Bundle {
     val touch_btn = Input(Bits(4.W))
     val dip_sw = Input(UInt(32.W))
+}
+
+class DebugDevicesOutput() extends Bundle {
     val leds = Output(UInt(16.W))
     val dpy0 = Output(Bits(8.W))
     val dpy1 = Output(Bits(8.W))
+}
+
+class DebugDevicesIO() extends Bundle {
+    // unimportant devices, e.g: leds, buttons
+    val in_devs = new DebugDevicesInput
+    val out_devs = new DebugDevicesOutput
 }
 
 class CoreIO() extends Bundle {
@@ -23,9 +31,9 @@ class CoreIO() extends Bundle {
     val bus_request = Flipped(new SysBusSlaveBundle)
 }
 
-class Core() extends Module {
+class Core(CoreID: Int) extends Module {
     val io = IO(new CoreIO)
-    val dpath = Module(new Datapath) 
+    val dpath = Module(new Datapath(CoreID)) 
     val ctrl  = Module(new Control)
     val ifetch = Module(new IFetch)
     val dmem = Module(new DMem)

@@ -14,8 +14,8 @@ import systemoncat.devices.PLICInterface
 //object InterruptPriority{}
 
 object InterruptRegisterAddr{ //Should be different for each core
-	val Core1Addr = "hc200000".U(32.W) //For Core one Interrupt Register
-	val Core2Addr = "hc200004".U(32.W) //For Core two Interrupt Register
+	val Core0Addr = "hc200000".U(32.W) //For Core one Interrupt Register
+	val Core1Addr = "hc200004".U(32.W) //For Core two Interrupt Register
 }
 
 object InterruptID{
@@ -34,8 +34,8 @@ class PLICIO() extends Bundle{
 	val external = Flipped(new PLICInterface)
 
 	//Interrupt Output
+	val core0_ext_irq_r = Output(UInt(32.W))
 	val core1_ext_irq_r = Output(UInt(32.W))
-	val core2_ext_irq_r = Output(UInt(32.W))
 
 }
 
@@ -55,10 +55,10 @@ class PLIC() extends SysBusSlave(new PLICIO){
 	val net_ip = Reg(Bool())
 	val reserved_ip = Reg(Bool())
 
+	//Core0 Interrupt Register(Read Only)
+	val Core0IR = Reg(UInt(32.W))
 	//Core1 Interrupt Register(Read Only)
 	val Core1IR = Reg(UInt(32.W))
-	//Core2 Interrupt Register(Read Only)
-	val Core2IR = Reg(UInt(32.W))
 
 	//Interrupt Permission
 	plicio.external.serial_permission := ~serial_gate
@@ -83,31 +83,31 @@ class PLIC() extends SysBusSlave(new PLICIO){
 		net_gate := true.B
 	}
 
-	plicio.core1_ext_irq_r := (Core1IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core1IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core1IR === InterruptID.NetID & net_ip === true.B)
+	plicio.core0_ext_irq_r := (Core0IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core0IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core0IR === InterruptID.NetID & net_ip === true.B)
 
-	plicio.core2_ext_irq_r := (Core2IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core2IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core2IR === InterruptID.NetID & net_ip === true.B)
+	plicio.core1_ext_irq_r := (Core1IR === InterruptID.KeyboardID & keyboard_ip === true.B) | (Core1IR === InterruptID.SerialPortID & serial_ip === true.B) | (Core1IR === InterruptID.NetID & net_ip === true.B)
 
 
 	when(keyboard_ip){
 		printf("Keyboard interrupt, Notify Core 1\n")
-		Core1IR := InterruptID.KeyboardID
+		Core0IR := InterruptID.KeyboardID
 
 		printf("Keyboard interrupt, Notify Core 2\n")
-		Core2IR := InterruptID.KeyboardID
+		Core1IR := InterruptID.KeyboardID
 
 	} .elsewhen(serial_ip){
 		printf("Serial interrupt, Notify Core 1\n")
-		Core1IR := InterruptID.SerialPortID
+		Core0IR := InterruptID.SerialPortID
 
 		printf("Serial interrupt, Notify Core 2\n")
-		Core2IR := InterruptID.SerialPortID
+		Core1IR := InterruptID.SerialPortID
 
 	} .elsewhen(net_ip){
 		printf("Net interrupt, Notify Core 1\n")
-		Core1IR := InterruptID.NetID
+		Core0IR := InterruptID.NetID
 
 		printf("Net interrupt, Notify Core 2\n")
-		Core2IR := InterruptID.NetID
+		Core1IR := InterruptID.NetID
 	}
 
 	val req = io.out.cyc_i && io.out.stb_i
@@ -117,7 +117,7 @@ class PLIC() extends SysBusSlave(new PLICIO){
 	val ans = RegInit(UInt(32.W), 0.U)
 
 	state := req
-	ans := Mux(io.out.adr_i(2), Core2IR.asUInt(),Core1IR.asUInt())
+	ans := Mux(io.out.adr_i(2), Core1IR.asUInt(),Core0IR.asUInt())
 
 	io.out.ack_o := state
 	io.out.stall_o := false.B
@@ -127,7 +127,7 @@ class PLIC() extends SysBusSlave(new PLICIO){
 
 	when(req){
 		when(!io.out.we_i){
-			val core = Mux(io.out.adr_i(2), Core2IR, Core1IR)
+			val core = Mux(io.out.adr_i(2), Core1IR, Core0IR)
 			switch(core){
 				is(InterruptID.KeyboardID){
 					keyboard_ip := false.B
