@@ -107,7 +107,9 @@ class Datapath() extends Module {
     val id_exe_data_hazard = Wire(Bool())
     val id_csr_data_hazard = Wire(Bool())
     val pc_stall = id_exe_data_hazard || id_csr_data_hazard || imem_locked || dmem_locked || imem_pending
-    pc_reg_valid := Mux(pc_stall, pc_reg_valid, true.B) && (!csr_branch) && (!tlb_flush_pipe)
+    val pc_enabled = Mux(pc_stall, pc_reg_valid, true.B) && (!csr_branch) && (!tlb_flush_pipe)
+
+    pc_reg_valid := pc_enabled
 
     val pc_reg_locked = RegInit(Bool(), false.B)
     val id_replay = Wire(Bool()) //happens when stalled
@@ -142,6 +144,8 @@ class Datapath() extends Module {
     val inst_reg = RegInit(NOP) // instruction in IF
 
     // ---------- IF -----------
+    io.imem.en := pc_enabled
+    // io.imem.en := true.B
     io.imem.pc := npc
     imem_locked := io.imem.locked
     imem_pending := io.imem.pending
