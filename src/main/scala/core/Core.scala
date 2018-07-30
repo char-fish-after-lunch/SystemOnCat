@@ -7,6 +7,7 @@ import systemoncat.mmu._
 import systemoncat.cache.Cache
 import systemoncat.devices.ROM
 import systemoncat.devices.PLICInterface
+import systemoncat.atomic._
 
 class DebugDevicesInput() extends Bundle {
     val touch_btn = Input(Bits(4.W))
@@ -42,6 +43,7 @@ class CoreIO() extends Bundle {
     val irq_client = Flipped(new ClientIrqIO)
     val bus_request = Flipped(new SysBusSlaveBundle)
     val store_info = new CoreStoreOpInfo
+    val amo_syn = Flipped(new AMOSynchronizerCoreIO)
 }
 
 class Core(CoreID: Int, not_to_cache: Seq[(BitPat, Bool)]) extends Module {
@@ -70,6 +72,7 @@ class Core(CoreID: Int, not_to_cache: Seq[(BitPat, Bool)]) extends Module {
     ifetch.io.pending <> bus_conn.io.imem_pending
     dmem.io.bus <> bus_conn.io.dmem
     dmem.io.wr_info <> io.store_info
+    dmem.io.amo_syn <> io.amo_syn
 
     io.ext_irq_r <> dpath.io.ext_irq_r
 

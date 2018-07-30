@@ -2,6 +2,7 @@ package systemoncat.core
 
 import chisel3._
 import chisel3.util._
+import systemoncat.atomic._
 
 class DMemRequest extends Bundle {
     val addr = Input(UInt(32.W))
@@ -37,6 +38,7 @@ class DMemIO extends Bundle {
     val core = new DMemCoreIO
     val bus = Flipped(new SysBusBundle)
     val wr_info = new CoreStoreOpInfo
+    val amo_syn = Flipped(new AMOSynchronizerCoreIO)
 }
 
 object AtomicConsts {
@@ -171,9 +173,9 @@ class DMem extends Module {
     amo.io.req.rs2_data := cur_wr_data
     amo.io.req.amo_op := cur_amo_op
     amo.io.bus.res := io.bus.res
+    amo.io.syn <> io.amo_syn
 
     amo_locked := amo.io.res.locked
-    // TODO: link AMO module into DMem
 
     when (!cur_amo_en) {
         io.bus.req.sel := mask

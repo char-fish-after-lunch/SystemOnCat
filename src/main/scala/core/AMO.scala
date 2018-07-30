@@ -2,6 +2,7 @@ package systemoncat.core
 
 import chisel3._
 import chisel3.util._
+import systemoncat.atomic._
 
 object AMO_OP {
     def AMO_X      = 0.U(4.W)
@@ -34,17 +35,19 @@ class AMOIO extends Bundle {
     val req = Input(new AMORequest)
     val res = Output(new AMOResponse)
     val bus = Flipped(new SysBusBundle)
+    val syn = Flipped(new AMOSynchronizerCoreIO)
 }
 
 class AMO extends Module {
     val io = IO(new AMOIO)
     val amoalu = Module(new AMOALU)
 
-    val sIDLE :: sLOAD :: sLOAD_WAIT :: sSTORE :: sSTORE_WAIT :: Nil = Enum(5)
-    // sIDLE: All operation finished, ready for next request.
-    // sLOAD: Sending a load request to sysbus (our sysbus requires data before a rising clk)
-    // sLOAD_WAIT: Waiting for load request. 
-    // sSTORE: When the data is loaded, send it to AMOALU & send a store request to sysbus.
+    val sIDLE :: sENTER :: sLOAD :: sLOAD_WAIT :: sSTORE :: sSTORE_WAIT :: Nil = Enum(6)
+    // sIDLE:       All operation finished, ready for next request.
+    // sENTER:      Wait for AMOSynchronizer until this operation is registered and allowed to continue.
+    // sLOAD:       Sending a load request to sysbus (our sysbus requires data before a rising clk)
+    // sLOAD_WAIT:  Waiting for load request. 
+    // sSTORE:      When the data is loaded, send it to AMOALU & send a store request to sysbus.
     // sSTORE_WAIT: Waiting for the store request.
 
     val state = RegInit(sIDLE)
@@ -60,6 +63,9 @@ class AMO extends Module {
     io.bus.req.wen := state === sSTORE
     io.bus.req.en := locked || io.request
 
+    io.syn.req := io.request
+    io.syn.locked := locked
+
     amoalu.io.cmd := cur_request.amo_op
     amoalu.io.op1 := cur_loaded_data
     amoalu.io.op2 := cur_request.rs2_data
@@ -68,8 +74,13 @@ class AMO extends Module {
     switch (state) {
         is(sIDLE) {
             when (io.request) {
-                state := sLOAD
+                state := sENTER
                 cur_request := io.req
+            }
+        }
+        is(sENTER) {
+            when (!io.syn.pending) {
+                state := sLOAD
             }
         }
         is(sLOAD) {

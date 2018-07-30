@@ -5,6 +5,7 @@ import chisel3.util._
 import systemoncat.core._
 import systemoncat.sysbus._
 import systemoncat.devices._
+import systemoncat.atomic._
 
 class SoCIO extends Bundle {
     val devs = new DebugDevicesIO
@@ -90,6 +91,9 @@ class SystemOnCat extends Module {
     arbiter.io.in(1) <> core1.io.bus_request
 
     val translator = Module(new SysBusTranslator(bus_map, bus_slaves))
+    val amo_syn = Module(new AMOSynchronizer)
+    amo_syn.io.core0 <> core0.io.amo_syn
+    amo_syn.io.core1 <> core1.io.amo_syn
 
     ram_slave.io.out    <> translator.io.in(0)
     ram2_slave.io.out   <> translator.io.in(1)
