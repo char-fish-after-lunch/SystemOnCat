@@ -25,14 +25,19 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     val r_tags = RegInit(Vec(Seq.fill(wayCount * (1 << indexWidth))(0.U((32 - indexWidth - blockWidth).W))))
     val r_valids = RegInit(Vec(Seq.fill(wayCount * (1 << indexWidth))(false.B)))
     val r_dirtys = RegInit(Vec(Seq.fill(wayCount * (1 << indexWidth))(false.B)))
-    val r_blocks = RegInit(Vec(Seq.fill(wayCount * (1 << indexWidth))(0.U((8 << blockWidth).W))))
+    val r_blocks = RegInit(Vec(Seq.fill(wayCount * (1 << (indexWidth + blockWidth)))(0.U(8.W))))
 
     def isValid(_index : UInt, _way_index : UInt) : Bool = r_valids(_index * wayCount.U + _way_index)
     def getTag(_index : UInt, _way_index: UInt) : UInt = r_tags(_index * wayCount.U + _way_index)
     def isDirty(_index : UInt, _way_index : UInt) : Bool = r_dirtys(_index * wayCount.U + _way_index)
-    def getData(_index : UInt, _way_index : UInt) : UInt = r_blocks(_index * wayCount.U + _way_index)
-    def getData(_index : UInt, _way_index : UInt, _bit_offset : UInt, _bit_count : Int) : UInt = {
-        (getData(_index, _way_index) >> _bit_offset)(_bit_count - 1, 0)
+    def getByte(_index : UInt, _way_index : UInt, _byte_offset : UInt) : UInt = {
+        r_blocks(((_index * wayCount.U + _way_index) << blockWidth.U) | _byte_offset)
+    }
+    def getWord(_index : UInt, _way_index : UInt, _word_offset : UInt) : UInt = {
+        Cat(Seq(getByte(_index, _way_index, (_word_offset << 2.U) | 3.U), 
+            getByte(_index, _way_index, (_word_offset << 2.U) | 2.U),
+            getByte(_index, _way_index, (_word_offset << 2.U) | 1.U),
+            getByte(_index, _way_index, _word_offset << 2.U)))
     }
 
     def getWayIndex(_index: UInt, _tag: UInt) : UInt = {
@@ -71,7 +76,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     val adr = io.bus.slave.adr_i
     val index = adr(tagStart - 1, indexStart)
     val tag = adr(31, tagStart)
-    val offset = (adr(indexStart - 1, 0) & ~3.U)(indexStart - 1, 0)
+    val offset = (adr(indexStart - 1, 0) & ~3.U(indexStart.W))(indexStart - 1, 0)
     val way_index = getWayIndex(index, tag)
     val entry_valid = isEntryValid(index, tag, way_index)
     val dat = io.bus.slave.dat_i
@@ -80,7 +85,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     val cur_adr = RegInit(UInt(32.W), 0.U)
     val cur_index = cur_adr(tagStart - 1, indexStart)
     val cur_tag = cur_adr(31, tagStart)
-    val cur_offset = (cur_adr(indexStart - 1, 0) & ~3.U)(indexStart - 1, 0)
+    val cur_offset = (cur_adr(indexStart - 1, 0) & ~3.U(indexStart.W))(indexStart - 1, 0)
     val cur_way_index = RegInit(UInt(log2Up(wayCount).W), 0.U)   
     val cur_dat = RegInit(UInt(32.W), 0.U)
     val cur_sel = RegInit(UInt(4.W), 0.U)
@@ -119,27 +124,21 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         isDirty(index, way_index), index, way_index, bus_stalled, blockSize.U, op_counter, bus_in_dat)
     printf("adr = %x\n", adr)
 
-    def writeMasked(_dat : UInt, _sel : UInt, _new_dat : UInt, _word_offset : UInt) : UInt = {
-        val new_data = Vec(_dat.toBools)
+    def writeEntry(_index : UInt, _way_index : UInt, _word_offset : UInt, _dat : UInt, _sel : UInt){
+        printf("Write Entry : %d, %d, %d, %d, %d\n", _index, _way_index, _word_offset, _dat, _sel)
+        assert(_sel.getWidth == 4)
+        assert(_dat.getWidth == 32)
         for(i <- 0 until 4){
             when(_sel(i)){
-                for(j <- 0 until 8){
-                    new_data((((_word_offset << 2.U) + i.U) << 3.U) + j.U) := _new_dat((i << 3) + j)
-                }
+                getByte(_index, _way_index, (_word_offset << 2.U) | i.U) := _dat(((i + 1) << 3) - 1, i << 3)
             }
         }
-        new_data.asUInt()
-    }
-
-    def writeEntry(_index : UInt, _way_index : UInt, _word_offset : UInt, _dat : UInt, _sel : UInt){
-        r_blocks(_index * wayCount.U + _way_index) := writeMasked(r_blocks(_index * wayCount.U + _way_index), 
-            _sel, _dat, 
-            _word_offset)
-        r_dirtys(_index * wayCount.U + _way_index) := true.B 
+        isDirty(_index, _way_index) := true.B
     }
 
     def writeToBus(_index : UInt, _way_index : UInt, _byte_offset : UInt){
-        dat_o := getData(_index, _way_index, _byte_offset << 3.U, 32)
+        assert(_byte_offset.getWidth == blockWidth)
+        dat_o := getWord(_index, _way_index, _byte_offset >> 2.U)
         adr_o := Cat(Seq(getTag(_index, _way_index), _index, _byte_offset))
         assert(Cat(Seq(getTag(_index, _way_index), _index, _byte_offset)).getWidth == 32)
 
@@ -218,32 +217,31 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
                 }
             }
         }.elsewhen(we){
-            writeEntry(index, way_index, offset, dat, sel)
+            writeEntry(index, way_index, offset >> 2.U, dat, sel)
         }
     }.elsewhen(state === STATE_FETCH){
         val next_counter = Mux(bus_stalled, op_counter, op_counter + 1.U)
 
+        printf("Fetch step %d, %d\n", op_counter, bus_in_dat)
         when(op_counter < blockSize.U){
-            when(!bus_stalled && op_counter > 0.U){
-                writeEntry(cur_index, cur_way_index, (op_counter - 1.U) << 2.U, bus_in_dat, 0xf.U(4.W))
+            when(bus_ack && op_counter > 0.U){
+                writeEntry(cur_index, cur_way_index, op_counter - 1.U, bus_in_dat, 0xf.U(4.W))
             }
             readFromBus(cur_index, cur_tag, Cat(op_counter, 0.U(2.W))(blockWidth - 1, 0))
             op_counter := next_counter
         }.otherwise{
             endBusTransaction()
             when(bus_ack){
-                val dat = writeMasked(getData(cur_index, cur_way_index), 0xf.U(4.W), bus_in_dat, (op_counter - 1.U) << 2.U)
+                writeEntry(cur_index, cur_way_index, op_counter - 1.U, bus_in_dat, 0xf.U(4.W))
+
                 state := STATE_IDLE
                 fetch_done := true.B
                 isDirty(cur_index, cur_way_index) := false.B
                 op_counter := 0.U
                 when(cur_we){
                     printf("hoola!\n")
-                    val dat_new = writeMasked(dat, cur_sel, cur_dat, Cat(cur_adr(31, 2), 0.U(2.W))(blockWidth - 1, 0))
-                    getData(cur_index, cur_way_index) := dat_new
-                    isDirty(cur_index, cur_way_index) := true.B
-                }.otherwise{
-                    getData(cur_index, cur_way_index) := dat
+                    writeEntry(cur_index, cur_way_index,
+                        cur_offset >> 2.U, cur_dat, cur_sel)
                 }
             }
         }
@@ -287,11 +285,12 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     io.bus.slave.rty_o := false.B
     io.bus.slave.stall_o := false.B
     io.bus.slave.dat_o := Mux(state === STATE_IDLE, 
-        getData(index, way_index, offset << 3.U, 32),
+        getWord(index, way_index, offset >> 2.U),
         Mux((cur_offset + 4.U)(blockWidth - 1, 0) === 0.U || state === STATE_DIRECT_ACCESS, 
             bus_in_dat,
-            getData(cur_index, cur_way_index, cur_offset << 3.U, 32),
+            getWord(cur_index, cur_way_index, cur_offset >> 2.U),
             ))
+    printf("D GET %d, %d, %d, %d, %d, %d\n", index, way_index, offset >> 2.U, offset, adr(indexStart - 1, 0), adr(indexStart - 1, 0) & ~3.U)
     //TODO: the last two bits in adr should be omitted 
 
     io.bus.master.cyc_i := cyc_o
