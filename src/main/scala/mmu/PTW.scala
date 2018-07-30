@@ -70,7 +70,7 @@ class PTW extends Module{
 
 	//mem access
 
-	io.mem.request := ((state === s_request) | (state === s_wait1)) & ~io.mem.valid
+	io.mem.request := ((state === s_request) | (state === s_wait1))
 	io.mem.addr := MuxLookup(state, 0.U(32.W), Seq(
 		s_request -> (Cat(io.baseppn, vpn_1) << 2),
 		s_wait1 -> (Cat(temp_pte.ppn, vpn_2) << 2)

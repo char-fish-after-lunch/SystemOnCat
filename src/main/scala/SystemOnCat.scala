@@ -18,9 +18,21 @@ class SoCIO extends Bundle {
 class SystemOnCat extends Module {
     val io = IO(new SoCIO)
 
+    
+    val not_to_cache = Seq(
+        BitPat("b00000000011111111111111111111???") -> true.B,
+        BitPat("b000000000111111111111111110?????") -> true.B,
+        BitPat("b000000000111111111111111100?????") -> true.B,
+        BitPat("b00000000011111111111111111110???") -> true.B,
+        BitPat("b0000000001111111111111111110????") -> true.B,
+        BitPat("b11111111111111111111111111??????") -> true.B
+        // BitPat("b????????????????????????????????") -> true.B
+    )
+
+
     // --------- Cores ----------
-    val core0 = Module(new Core(0))
-    val core1 = Module(new Core(1))
+    val core0 = Module(new Core(0, not_to_cache))
+    val core1 = Module(new Core(1, not_to_cache))
     io.devs.out_devs <> core0.io.devs.out_devs
     io.devs.in_devs <> core0.io.devs.in_devs
     io.devs.in_devs <> core1.io.devs.in_devs
@@ -86,6 +98,6 @@ class SystemOnCat extends Module {
     flash_slave.io.out  <> translator.io.in(6)
     rom.io.out          <> translator.io.in(7)
 
-    arbitor.io.out <> translator.io.out
+    arbiter.io.out <> translator.io.out
 
 }

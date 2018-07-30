@@ -16,12 +16,17 @@ sw x1, 128(x11)
 sw x2, 132(x11)
 addi x11, x11, 8
 bne x10, x3, loop
+end:
+j end
 nop
 nop
 nop
 nop
 nop
 nop
+loopp:
+nop
+j loopp
 
 vaddr:
     .word 0x3000
