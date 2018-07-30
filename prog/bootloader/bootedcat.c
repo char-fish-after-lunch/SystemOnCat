@@ -11,7 +11,7 @@
 #define ROUND_UP(x, b) (CEIL((x), (b)) << (b))
 #define ROUND_DOWN(x, b) (FLOOR((x), (b)) << (b))
 
-#define PGDIR ((uint32_t*)4096)
+#define PGDIR ((uint32_t*)8192)
 #define PG_COUNT 1024
 #define PG_SIZE 4096
 #define PG_WIDTH 12
@@ -60,7 +60,7 @@ static void read_flash(char* c, uint32_t num, uintptr_t adr){
 
 #ifdef WITH_AT
 
-uint32_t pt_count;
+static uint32_t pt_count;
 
 void memset(char* adr, char v, uint32_t sz){
     uint32_t i;
@@ -73,8 +73,8 @@ void address_map(uint32_t va, uint32_t pa){
     uint32_t* pt;
     uint32_t* pte;
     if(!(PTE_VALID & *pde)){
-        *pde = ((2 + pt_count) << 10) | PTE_VALID;
-        memset((char*)((2 + pt_count) << PG_WIDTH), 0, PG_SIZE);
+        *pde = ((3 + pt_count) << 10) | PTE_VALID;
+        memset((char*)((3 + pt_count) << PG_WIDTH), 0, PG_SIZE);
         ++ pt_count;
     }
     pt = (uint32_t*)(PTE_PPN(*pde) << PG_WIDTH);
@@ -94,6 +94,22 @@ void at_buildup(uintptr_t va_base, uint32_t pa_bound, uintptr_t pa_base){
 }
 #endif
 
+
+#ifdef WITH_SMP
+static volatile int bsp_done = 0;
+static volatile uintptr_t entry_adr;
+
+void bootap(void){
+    while(!bsp_done);
+#ifdef WITH_AT
+    write_csr(satp, ((uint32_t)1 << 31) | 2);
+#endif
+    ((void (*)(void))(entry_adr)) ();
+}
+
+#endif
+
+
 void bootmain(void){
     print("BootedCat!\n\n");
 
@@ -107,12 +123,12 @@ void bootmain(void){
     pt_count = 0;
     memset((char*)PGDIR, 0, PG_SIZE);
     at_buildup(VA_BASE, PA_BOUND, 0);
-    at_buildup(0, PG_SIZE, 0); // the bootloader itself also needs mapping
+    at_buildup(0, PG_SIZE << 1, 0); // the bootloader itself also needs mapping
     at_buildup(PA_BOUND - PG_SIZE, PG_SIZE, PA_BOUND - PG_SIZE); 
 
     // map the devices for convenience
 
-    write_csr(satp, ((uint32_t)1 << 31) | 1);
+    write_csr(satp, ((uint32_t)1 << 31) | 2);
 #endif
     
     uintptr_t flash_ph_adr = elf_header.e_phoff + ELF_START;
@@ -128,9 +144,15 @@ void bootmain(void){
         read_flash((char*)va, sz, flash_adr);
     }
 
+#ifdef WITH_SMP
+    bsp_done = 1;
+    entry_adr = elf_header.e_entry;
+#endif
+
     ((void (*)(void))(elf_header.e_entry)) ();
 
     bad:
         print("Fatal error: broken ELF image.\n");
         while(1){}
 }
+
