@@ -26,23 +26,12 @@ class DebugDevicesIO() extends Bundle {
     val out_devs = new DebugDevicesOutput
 }
 
-class CoreStoreOpInfoBundle extends Bundle {
-    val wen = Bool()
-    val addr = UInt(32.W)
-}
-
-class CoreStoreOpInfo extends Bundle {
-    // writing operations, used to synchronize LR/SC in 2 cores
-    val out = Output(new CoreStoreOpInfoBundle)
-    val in = Input(new CoreStoreOpInfoBundle)
-}
-
 class CoreIO() extends Bundle {
     val devs = new DebugDevicesIO
     val ext_irq_r = Input(Bool())
     val irq_client = Flipped(new ClientIrqIO)
     val bus_request = Flipped(new SysBusSlaveBundle)
-    val store_info = new CoreStoreOpInfo
+    val lrsc_syn = Flipped(new LRSCSynchronizerCoreIO)
     val amo_syn = Flipped(new AMOSynchronizerCoreIO)
 }
 
@@ -72,7 +61,7 @@ class Core(CoreID: Int, not_to_cache: Seq[(BitPat, Bool)]) extends Module {
     ifetch.io.bus <> bus_conn.io.imem
     ifetch.io.pending <> bus_conn.io.imem_pending
     dmem.io.bus <> bus_conn.io.dmem
-    dmem.io.wr_info <> io.store_info
+    dmem.io.lrsc_syn <> io.lrsc_syn
     dmem.io.amo_syn <> io.amo_syn
 
     io.ext_irq_r <> dpath.io.ext_irq_r

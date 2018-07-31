@@ -34,8 +34,6 @@ class SystemOnCat extends Module {
     // --------- Cores ----------
     val core0 = Module(new Core(0, not_to_cache))
     val core1 = Module(new Core(1, not_to_cache))
-    core0.io.store_info.in <> core1.io.store_info.out
-    core1.io.store_info.in <> core0.io.store_info.out
     io.devs.out_devs <> core0.io.devs.out_devs
     io.devs.in_devs <> core0.io.devs.in_devs
     io.devs.in_devs <> core1.io.devs.in_devs
@@ -90,10 +88,15 @@ class SystemOnCat extends Module {
     arbiter.io.in(0) <> core0.io.bus_request
     arbiter.io.in(1) <> core1.io.bus_request
 
-    val translator = Module(new SysBusTranslator(bus_map, bus_slaves))
     val amo_syn = Module(new AMOSynchronizer)
     amo_syn.io.core0 <> core0.io.amo_syn
     amo_syn.io.core1 <> core1.io.amo_syn
+
+    val lrsc_syn = Module(new LRSCSynchronizer)
+    lrsc_syn.io.core0 <> core0.io.lrsc_syn
+    lrsc_syn.io.core1 <> core1.io.lrsc_syn
+
+    val translator = Module(new SysBusTranslator(bus_map, bus_slaves))
 
     ram_slave.io.out    <> translator.io.in(0)
     ram2_slave.io.out   <> translator.io.in(1)
