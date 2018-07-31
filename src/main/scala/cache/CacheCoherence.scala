@@ -55,6 +55,9 @@ Write-back:
 
 
 ---------------- Responding to Broadcast Messages ------
+A possible compromise: respond with STALL whenever in transitional states, including FETCH, MODIFY and WRITE_BACK
+
+
 IDLE:
     Fetch:
         Hit: return entry -> dirty-found/clean-found
@@ -88,7 +91,7 @@ WRITE_BACK:
     Fetch:
         Hit:
             Colliding: -> STALL
-            Separate: retuen entry -> clean-found/dirty-found
+            Separate: return entry -> clean-found/dirty-found
         Miss: do nothing
     Modify:
         Hit, Separate: update

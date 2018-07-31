@@ -7,13 +7,13 @@ import chisel3.util._
 
 class CacheArbiter extends Module{
     val io = IO(new Bundle{
-        val cache1_priv = Output(Bool())
-        val cache2_priv = Output(Bool())
+        val cache1_turn = Output(Bool())
+        val cache2_turn = Output(Bool())
     })
 
     val token = RegInit(Bool(), true.B)
     token := !token
     
-    io.cache1_priv := token
-    io.cache2_priv := !token
+    io.cache1_turn := token
+    io.cache2_turn := !token
 }

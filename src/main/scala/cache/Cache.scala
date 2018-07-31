@@ -11,6 +11,7 @@ class CacheBundle extends Bundle{
     val bus = new SysBusFilterBundle
     val snooper = new CacheCoherenceBundle
     val broadcaster = Flipped(new CacheCoherenceBundle)
+    val my_turn = Input(Bool())
 }
 
 class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[(BitPat, Bool)]) extends Module{
@@ -29,6 +30,10 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     val r_dirtys = RegInit(Vec(Seq.fill(wayCount * (1 << indexWidth))(false.B)))
     val r_blocks = RegInit(Vec(Seq.fill(wayCount * (1 << (indexWidth + blockWidth)))(0.U(8.W))))
 
+    def computeTag(_adr : UInt) : UInt = _adr(31, tagStart)
+    def computeIndex(_adr : UInt) : UInt = _adr(tagStart - 1, indexStart)
+    def computeOffset(_adr : UInt) : UInt = (_adr(indexStart - 1, 0) & ~3.U(indexStart.W))(indexStart - 1, 0)
+
     def isValid(_index : UInt, _way_index : UInt) : Bool = r_valids(_index * wayCount.U + _way_index)
     def getTag(_index : UInt, _way_index: UInt) : UInt = r_tags(_index * wayCount.U + _way_index)
     def isDirty(_index : UInt, _way_index : UInt) : Bool = r_dirtys(_index * wayCount.U + _way_index)
@@ -40,6 +45,9 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             getByte(_index, _way_index, (_word_offset << 2.U) | 2.U),
             getByte(_index, _way_index, (_word_offset << 2.U) | 1.U),
             getByte(_index, _way_index, _word_offset << 2.U)))
+    }
+    def getBlock(_index : UInt, _way_index : UInt) : UInt = {
+        Cat((for(i <- 0 until blockSize) yield getWord(_index, _way_index, i.U)).reverse)
     }
 
     def getWayIndex(_index: UInt, _tag: UInt) : UInt = {
@@ -71,28 +79,63 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     }
 
 
+    // -----------------------------
+
+    val cache_stalled = io.broadcast.response_type === CacheCoherence.RE_STALL
+    val cache_prev_stalled = RegInit(Bool(), false.B)
+    cache_prev_stalled := cache_stalled
+
     // Slave Input
 
-    val stb = io.bus.slave.stb_i
-    val cyc = io.bus.slave.cyc_i
-    val we = io.bus.slave.we_i
-    val adr = io.bus.slave.adr_i
-    val index = adr(tagStart - 1, indexStart)
-    val tag = adr(31, tagStart)
-    val offset = (adr(indexStart - 1, 0) & ~3.U(indexStart.W))(indexStart - 1, 0)
+    val prev_stb = RegInit(Bool(), false.B)
+    val prev_cyc = RegInit(Bool(), false.B)
+    val prev_we = RegInit(Bool(), false.B)
+    val prev_adr = RegInit(UInt(32.W), 0.U)
+    val prev_dat = RegInit(UInt(32.W), 0.U)
+    val prev_sel = RegInit(UInt(4.W), 0.U)
+
+    val stb = Mux(cache_prev_stalled, prev_stb, io.bus.slave.stb_i)
+    val cyc = Mux(cache_prev_stalled, prev_cyc, io.bus.slave.cyc_i)
+    val we = Mux(cache_prev_setalled, prev_we, io.bus.slave.we_i)
+    val adr = Mux(cache_prev_setalled, prev_adr, io.bus.slave.adr_i)
+    val index = computeIndex(adr)
+    val tag = computeTag(adr)
+    val offset = computeOffset(adr)
     val way_index = getWayIndex(index, tag)
     val entry_valid = isEntryValid(index, tag, way_index)
-    val dat = io.bus.slave.dat_i
-    val sel = io.bus.slave.sel_i
+    val dat = Mux(cache_prev_setalled, prev_dat, io.bus.slave.dat_i)
+    val sel = Mux(cache_prev_setalled, prev_sel, io.bus.slave.sel_i)
+
+    prev_stb := stb
+    prev_cyc := cyc
+    prev_we := we
+    prev_adr := adr
+    prev_dat := dat
+    prev_sel := sel
+
+    // ----------------------------
 
     val cur_adr = RegInit(UInt(32.W), 0.U)
-    val cur_index = cur_adr(tagStart - 1, indexStart)
-    val cur_tag = cur_adr(31, tagStart)
-    val cur_offset = (cur_adr(indexStart - 1, 0) & ~3.U(indexStart.W))(indexStart - 1, 0)
-    val cur_way_index = RegInit(UInt(log2Up(wayCount).W), 0.U)   
+    val cur_index = computeIndex(cur_index)
+    val cur_tag = computeTag(cur_adr)
+    val cur_offset = computeOffset(cur_adr)
+    val cur_way_index = RegInit(UInt(log2Up(wayCount).W), 0.U)
     val cur_dat = RegInit(UInt(32.W), 0.U)
     val cur_sel = RegInit(UInt(4.W), 0.U)
     val cur_we = RegInit(Bool(), false.B)
+
+    // ------------------------------
+    
+    val partner_adr = io.snooper.broadcast_adr
+    val partner_index = computeIndex(partner_adr)
+    val partner_tag = computeTag(partner_adr)
+    val partner_offset = computeTag(partner_adr)
+    val partner_dat = io.snooper.broadcast_dat
+    val partner_sel = io.snooper.broadcast_sel
+    val partner_we = io.snooper.broadcast_type === CacheCoherence.BR_MODIFY
+    val partner_way_index = getWayIndex(partner_index, partner_tag)
+    val partner_entry_valid = isEntryValid(partner_index, partner_tag, partner_way_index)
+
 
 
     val state = RegInit(UInt(4.W), STATE_IDLE)
@@ -139,7 +182,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     }
 
     // Broadcaster
-    io.broadcaster.broadcast_type := CacheCoherence.BR_NOMSG
+    io.broadcaster.broadcast_type := CacheCoherence.BR_NO_MSG
     io.broadcaster.broadcast_adr := 0.U
     io.broadcaster.broadcast_dat := 0.U
 
@@ -232,7 +275,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     }
 
 
-    def commenceFetch(_index : UInt, _way_index : UInt, _current : Boolean){
+    def commenceFetch(_index : UInt, _way_index : UInt, _current : Boolean) : Bool = {
         // broadcast the message that we would fetch the data
                     
         sendBroadcast(CacheCoherence.BR_FETCH, adr, 0.U, 0.U)
@@ -259,10 +302,12 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
                 isDirty(_index, _way_index) := false.B
             }
         }
+
+        io.broadcast_tag.response_type =\= CacheCoherence.RE_STALL
     }
 
 
-    def commenceWriteBack(_index : UInt, _way_index : UInt, _current : Boolean){
+    def commenceWriteBack(_index : UInt, _way_index : UInt, _current : Boolean) : Bool = {
         sendBroadcast(CacheCoherence.BR_WRITE_BACK, adr, 0.U, 0.U)
         switch(io.broadcaster.response_type){
             is(CacheCoherence.RE_NO_MSG){
@@ -274,23 +319,31 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             }
             is(CacheCoherence.RE_NO_MSG){
                 // finish write back
+                // TODO: the state might not hold if this is stalled
                 commenceFetch(_index, _way_index, _current)
             }
         }
         assert(io.broadcaster.response_type =\= CacheCoherence.RE_CLEAN_FOUND &&
             io.broadcaster.response_type =\= CacheCoherence.RE_DIRTY_FOUND)
+
+        io.broadcast_tag.response_type =\= CacheCoherence.RE_STALL
     }
 
-    def modifyEntry(_index : UInt, _way_index : UInt, _current : Boolean){
+    def modifyEntry(_index : UInt, _way_index : UInt, _current : Boolean) : Bool = {
         if(_current){
             sendBroadcast(CacheCoherence.BR_MODIFY, adr, cur_dat, cur_sel)
-            writeEntry(_index, _way_index, cur_offset, cur_dat, cur_sel)
+            when(io.broadcaster.response_type =\= CacheCoherence.RE_STALL){
+                writeEntry(_index, _way_index, cur_offset, cur_dat, cur_sel)
+            }
         } else{
             sendBroadcast(CacheCoherence.BR_MODIFY, adr, dat, sel)
-            writeEntry(_index, _way_index, set, dat, sel)
+            when(io.broadcaster.response_type =\= CacheCoherence.RE_STALL){
+                writeEntry(_index, _way_index, set, dat, sel)
+            }
         }
 
-        assert(io.broadcaster.response_type === CacheCoherence.RE_NO_MSG) 
+        assert(io.broadcaster.response_type === CacheCoherence.RE_NO_MSG)
+        io.broadcast_tag.response_type =\= CacheCoherence.RE_STALL
     }
 
     when(cyc && stb && state === STATE_IDLE){
@@ -314,22 +367,23 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
 
                     // happily, a vacant slot found
 
-                    commenceFetch(index, n_way_index, false)
-
-                    if(wayCount != 1){
-                        next_victim := Mux(isValid(index, vacant_way_index), next_victim + 1.U, next_victim)
+                    when(commenceFetch(index, n_way_index, false)){
+                        if(wayCount != 1){
+                            next_victim := Mux(isValid(index, vacant_way_index), next_victim + 1.U, next_victim)
+                        }
+                        getTag(index, n_way_index) := tag
+                        isValid(index, n_way_index) := true.B
                     }
-                    getTag(index, n_way_index) := tag
-                    isValid(index, n_way_index) := true.B
 
                 }.otherwise{
                     // writeback necessary
 
-                    commenceWriteBack(index, next_victim, false)
-
-                    if(wayCount != 1){
-                        next_victim := next_victim + 1.U
+                    when(commenceWriteBack(index, next_victim, false)){
+                        if(wayCount != 1){
+                            next_victim := next_victim + 1.U
+                        }
                     }
+
                 }
             }
         }.elsewhen(we){
@@ -362,9 +416,11 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             writeToBus(cur_index, cur_way_index, Cat(op_counter, 0.U(2.W))(blockWidth - 1, 0))
             op_counter := next_counter
         }.otherwise{
-            commenceFetch(cur_index, cur_way_index, cur_tag, true)
-            isValid(cur_index, cur_way_index) := true.B
-            getTag(cur_index, cur_way_index) := cur_tag
+            when(commenceFetch(cur_index, cur_way_index, cur_tag, true)){
+                isValid(cur_index, cur_way_index) := true.B
+                getTag(cur_index, cur_way_index) := cur_tag    
+            }
+            // TODO: audit whether the state holds in stalled cases
         }
     }.elsewhen(state === STATE_DIRECT_ACCESS){
         val next_counter = Mux(bus_stalled, op_counter, op_counter + 1.U)
@@ -382,6 +438,54 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         }
     }
 
+    val i_have_something_to_do = io.broadcaster.broadcast_type =\= CacheCoherence.BR_NO_MSG
+    val partner_has_something_to_do = io.snooper.broadcast_type =\= CacheCoherence.BR_NO_MSG
+
+    def inSameBlock(_adr1 : UInt, _adr2 : UInt) : Bool = {
+        computeIndex(_adr1) === computeIndex(_adr2) && computeTag(_adr1) === computeTag(_adr2)
+    }
+
+    def tasksCollide : Bool = {
+        i_have_something_to_do && partner_has_something_to_do &&
+            inSameBlock(io.broadcaster.broadcast_adr, io.snooper.broadcast_adr)
+    }
+
+    def tasksTransitionCollide : Bool = {
+        (state =\= STATE_IDLE && state =\= STATE_DIRECT_ACCESS) && partner_has_something_to_do && 
+            inSameBlock(io.broadcaster.broadcast_adr, io.snooper.broadcast_adr)
+    }
+
+    val partner_stalled = Wire(Bool())
+    partner_stalled := false.B
+
+    when((tasksCollide && io.my_turn) || 
+        (!i_have_something_to_do && tasksTransitionCollide)){
+        // in collision, if it is my turn, tell partner to wait
+        sendResponse(CacheCoherence.RE_STALL)
+        partner_stalled := true.B
+    }
+
+    when(!partner_stalled && partner_has_something_to_do && partner_entry_valid){
+        // partner will do its job
+        // so i have to send a serious response
+        switch(io.snooper.broadcast_type){
+            is(CacheCoherence.BR_FETCH){
+                sendResponse(Mux(isDirty(partner_index, partner_way_index), 
+                    CacheCoherence.RE_DIRTY_FOUND, CacheCoherence.RE_CLEAN_FOUND),
+                    getBlock(partner_index, partner_way_index))
+            }
+            is(CacheCoherence.BR_MODIFY){
+                writeEntry(partner_index, partner_way_index,
+                    partner_offset >> 2.U, partner_dat, partner_sel)
+                isDirty(partner_index, partner_way_index) := true.B
+                // no need to send any response in this case
+            }
+            is(CacheCoherence.BR_WRITE_BACK){
+                sendResponse(CacheCoherence.RE_NO_WRITE_BACK)
+                assert(isDirty(partner_index, partner_way_index))
+            }
+        }
+    }
 
 
     val ack = (((state === STATE_FETCH || state === STATE_DIRECT_ACCESS) && fetch_done) ||
