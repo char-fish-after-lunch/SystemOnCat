@@ -4,7 +4,7 @@ LD := $(ARCH_PREF)ld
 OBJDUMP := $(ARCH_PREF)objdump
 OBJCOPY := $(ARCH_PREF)objcopy
 MARCH := rv32i
-CFLAGS :=
+CFLAGS := -DWITH_SMP
 START_ADR := 0xffffff80
 
 mastercat.bin: out.o

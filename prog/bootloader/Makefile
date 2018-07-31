@@ -6,7 +6,7 @@ OBJCOPY := $(ARCH_PREF)objcopy
 MARCH := rv32i
 VA_BASE := 0xC0000000
 PA_BOUND := 0x800000
-CFLAGS := -DWITH_AT
+CFLAGS := -DWITH_AT -DWITH_SMP
 START_ADR := 0x0
 
 bootedcat.bin: out.o
