@@ -49,6 +49,14 @@ class CacheTester(c: => Cache) extends BasicTester {
     val last_adr = RegInit(UInt(32.W), 0.U)
     val last_we = RegInit(Bool(), false.B)
 
+
+    cache.io.snooper.broadcast_adr := 0.U
+    cache.io.snooper.broadcast_dat := 0.U
+    cache.io.snooper.broadcast_sel := 0.U
+    cache.io.broadcaster.response_type := CacheCoherence.RE_NO_MSG
+    cache.io.broadcaster.response_dat := 0.U
+    cache.io.my_turn := false.B
+
     cache.io.bus.slave.adr_i := test_adr_i(cntr)
     cache.io.bus.slave.we_i := test_we_i(cntr)
     cache.io.bus.slave.cyc_i := test_cyc_i(cntr)
@@ -60,6 +68,10 @@ class CacheTester(c: => Cache) extends BasicTester {
     cache.io.bus.slave.dat_i := cache.io.bus.master.adr_i + 2.U
     cache.io.bus.slave.sel_i := "b0010".U(4.W)
     cache.io.bus.master.dat_o := cache.io.bus.master.adr_i + 1.U
+    cache.io.snooper.broadcast_type := CacheCoherence.BR_NO_MSG
+
+
+
     last_adr := cache.io.bus.master.adr_i
     last_we := cache.io.bus.master.we_i
 

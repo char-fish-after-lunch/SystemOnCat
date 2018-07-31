@@ -118,7 +118,7 @@ object CacheCoherence{
     def BR_WRITE_BACK = 3.U(2.W)
 }
 
-class CacheSnooperBundle(blockWidth : Int) extends Bundle {
+class CacheSnooperBundle(val blockWidth : Int) extends Bundle {
     val broadcast_type = Input(UInt(2.W))
     val broadcast_adr = Input(UInt(32.W))
     val broadcast_dat = Input(UInt(32.W))

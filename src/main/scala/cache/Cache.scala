@@ -7,7 +7,7 @@ import chisel3.core.Module
 import chisel3.util._
 
 
-class CacheBundle(blockWidth : Int) extends Bundle{
+class CacheBundle(val blockWidth : Int) extends Bundle{
     val bus = new SysBusFilterBundle
     val snooper = new CacheSnooperBundle(blockWidth)
     val broadcaster = Flipped(new CacheSnooperBundle(blockWidth))
@@ -191,6 +191,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     io.broadcaster.broadcast_type := CacheCoherence.BR_NO_MSG
     io.broadcaster.broadcast_adr := 0.U
     io.broadcaster.broadcast_dat := 0.U
+    io.broadcaster.broadcast_sel := 0.U
 
     def sendBroadcast(_type : UInt, _adr : UInt, _dat : UInt, _sel : UInt){
         io.broadcaster.broadcast_type := _type
@@ -265,7 +266,6 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         fetched_way_index := _way_index
         when(_we){
             modifyEntry(_index, _way_index, _current)
-            //TODO: state not hold
         }.otherwise{
             state := STATE_IDLE
             op_counter := 0.U
@@ -328,7 +328,6 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             }
             is(CacheCoherence.RE_NO_WRITE_BACK){
                 // finish write back
-                // TODO: the state might not hold if this is stalled
                 state := STATE_WRITE_BACK
                 op_counter := blockSize.U
             }
@@ -341,7 +340,6 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
 
     def modifyEntry(_index : UInt, _way_index : UInt, _current : Boolean) : Bool = {
         if(_current){
-            //TODO: the state might not hold
             sendBroadcast(CacheCoherence.BR_MODIFY, adr, cur_dat, cur_sel)
             when(io.broadcaster.response_type =/= CacheCoherence.RE_STALL){
                 writeEntry(_index, _way_index, cur_offset, cur_dat, cur_sel)
