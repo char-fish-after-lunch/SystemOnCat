@@ -55,7 +55,8 @@ class Core(CoreID: Int, not_to_cache: Seq[(BitPat, Bool)]) extends Module {
 
     val bus_conn = Module(new SysBusConnector())
     val mmu = Module(new MMUWrapper())
-    val cache = Module(new Cache(3, 2, 4, not_to_cache))
+    // val cache = Module(new Cache(3, 2, 4, not_to_cache))
+    val cache = Module(new Cache(2, 1, 1, not_to_cache))
 
     mmu.io.csr_info <> dpath.io.mmu_csr_info
     mmu.io.expt <> dpath.io.mmu_expt

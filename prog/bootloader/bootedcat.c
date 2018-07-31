@@ -55,6 +55,9 @@ static void read_flash(char* c, uint32_t num, uintptr_t adr){
         FLASH_ADR_SET(adr + i);
         while(!FLASH_READY);
         c[i] = FLASH_DAT;
+        if (!(i & 0x1fff)) {
+            print(".");
+        }
     }
 }
 
@@ -131,6 +134,7 @@ void bootmain(void){
     write_csr(satp, ((uint32_t)1 << 31) | 2);
 #endif
     
+    print("Loading OS from FLASH");
     uintptr_t flash_ph_adr = elf_header.e_phoff + ELF_START;
     struct proghdr ph;
     uint32_t i, num = elf_header.e_phnum, ph_sz = elf_header.e_phentsize;
@@ -143,12 +147,12 @@ void bootmain(void){
         sz = ph.p_memsz;
         read_flash((char*)va, sz, flash_adr);
     }
+    print("\n");
 
 #ifdef WITH_SMP
     bsp_done = 1;
     entry_adr = elf_header.e_entry;
 #endif
-
     ((void (*)(void))(elf_header.e_entry)) ();
 
     bad:
