@@ -99,12 +99,13 @@ class DMem extends Module {
     val cur_wr_en = Mux(cur_locked, prev_wr_en, io.core.req.wr_en || sc_valid)
     val cur_rd_en = Mux(cur_locked, prev_rd_en, io.core.req.rd_en)
     val cur_sc_en = Mux(cur_locked, prev_sc_en, io.core.req.sc_en)
+    val cur_sc_valid = Mux(cur_locked, prev_sc_valid, sc_valid)
     val cur_mem_type = Mux(cur_locked, prev_mem_type, io.core.req.mem_type)
     val cur_amo_en = Mux(cur_locked, prev_amo_en, io.core.req.amo_en)
     val cur_amo_op = Mux(cur_locked, prev_amo_op, io.core.req.amo_op)
 
-    modify_en := (io.core.req.wr_en || io.core.req.sc_en) || (prev_wr_en && io.bus.res.locked) ||
-        io.core.req.amo_en || cur_sc_en
+    modify_en := io.core.req.wr_en || (prev_wr_en && io.bus.res.locked) ||
+        io.core.req.amo_en
     modify_addr := Mux(prev_wr_en && io.bus.res.locked, cur_addr, io.core.req.addr)
 
     val byte_masks = Seq(
@@ -197,12 +198,12 @@ class DMem extends Module {
 
     val prev_read_data = RegInit(UInt(32.W), 0.U)
     val prev_locked = RegInit(Bool(), false.B)
-    prev_locked := io.core.res.locked
+    prev_locked := io.bus.res.locked
 
     val cur_read_data = Mux(prev_sc_en, Mux(prev_sc_valid, 0.U(32.W), 1.U(32.W)),
         Mux(prev_rd_en, ext_data, 0.U(32.W)))
 
-    when ((!io.core.res.locked && prev_locked) || cur_sc_en) {
+    when ((!io.bus.res.locked && prev_locked) || cur_sc_en) {
         prev_read_data := cur_read_data
     }
     val read_data = Mux(prev_locked || prev_sc_en, cur_read_data, prev_read_data)
