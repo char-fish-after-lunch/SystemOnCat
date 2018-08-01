@@ -48,10 +48,14 @@ class DMem extends Module {
     val amo_locked = Wire(Bool())
 
     // -------- LR & SC --------
+    val modify_en = Wire(Bool())
+    val modify_addr = Wire(UInt())
+
     io.lrsc_syn.lr_en := io.core.req.lr_en
     io.lrsc_syn.sc_en := io.core.req.sc_en
-    io.lrsc_syn.addr := io.core.req.addr
-    io.lrsc_syn.modify_en := io.core.req.wr_en || io.core.req.amo_en || io.core.req.sc_en
+
+    io.lrsc_syn.addr := modify_addr
+    io.lrsc_syn.modify_en := modify_en
     io.lrsc_syn.in_amo := amo_locked
     val sc_valid = io.lrsc_syn.sc_valid
     // reservation hasn't been broken, store conditional succeed
@@ -94,9 +98,14 @@ class DMem extends Module {
     val cur_en = Mux(cur_locked, prev_en, en)
     val cur_wr_en = Mux(cur_locked, prev_wr_en, io.core.req.wr_en || sc_valid)
     val cur_rd_en = Mux(cur_locked, prev_rd_en, io.core.req.rd_en)
+    val cur_sc_en = Mux(cur_locked, prev_sc_en, io.core.req.sc_en)
     val cur_mem_type = Mux(cur_locked, prev_mem_type, io.core.req.mem_type)
     val cur_amo_en = Mux(cur_locked, prev_amo_en, io.core.req.amo_en)
     val cur_amo_op = Mux(cur_locked, prev_amo_op, io.core.req.amo_op)
+
+    modify_en := (io.core.req.wr_en || io.core.req.sc_en) || (prev_wr_en && io.bus.res.locked) ||
+        io.core.req.amo_en || cur_sc_en
+    modify_addr := Mux(prev_wr_en && io.bus.res.locked, cur_addr, io.core.req.addr)
 
     val byte_masks = Seq(
         0.U(4.W) -> "b0001".U(4.W),

@@ -48,7 +48,7 @@ class LRSCSynchronizer extends Module {
     val reservation_broke = Wire(Vec(NCPUs, Bool()))
     val core = IndexedSeq(io.core0, io.core1)
 
-    val sc_conflict = core(0).sc_en && core(1).sc_en && 
+    val sc_conflict = core(0).sc_en && core(1).sc_en && core(0).addr === core(1).addr && core(0).addr === lr_reserved_addr(0)
         lr_reserved_addr(0) === lr_reserved_addr(1) && lr_valid(0) && lr_valid(1)
     // this is why this module even exists. when 2 cores try Store Conditional on the same address, 
     // only one of them is allowed to continue.
@@ -70,7 +70,7 @@ class LRSCSynchronizer extends Module {
             Mux(core(NCPUs-1-i).in_amo, 0.U, lr_valid_counter(i) + 1.U))))))
 
         core(i).sc_valid := Mux(sc_conflict, i.U === 0.U,
-            core(i).sc_en && lr_valid(i) && lr_reserved_addr(i) === core(i).addr && (!core(NCPUs-1-i).in_amo)
+            core(i).sc_en && lr_valid(i) && lr_reserved_addr(i) === core(i).addr && (!core(NCPUs-1-i).in_amo) &&
             !(core(NCPUs-1-i).modify_en && core(NCPUs-1-i).addr === lr_reserved_addr(i)))
             // When a store and a SC happens at the same time, as we don't know which one will execute first, 
             // we assume that SC fails.
