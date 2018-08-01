@@ -43,8 +43,21 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     def isValid(_index : UInt, _way_index : UInt) : Bool = r_valids(_index * wayCount.U + _way_index)
     def getTag(_index : UInt, _way_index: UInt) : UInt = r_tags(_index * wayCount.U + _way_index)
     def isDirty(_index : UInt, _way_index : UInt) : Bool = r_dirtys(_index * wayCount.U + _way_index)
-    def getByte(_index : UInt, _way_index : UInt, _byte_offset : UInt) : UInt = {
+    def getCurrentByte(_index : UInt, _way_index : UInt, _byte_offset : UInt) : UInt = {
         c_blocks(((_index * wayCount.U + _way_index) << blockWidth.U) | _byte_offset)
+    }
+    def getCurrentWord(_index : UInt, _way_index : UInt, _word_offset : UInt) : UInt = {
+        Cat(Seq(getCurrentByte(_index, _way_index, (_word_offset << 2.U) | 3.U), 
+            getCurrentByte(_index, _way_index, (_word_offset << 2.U) | 2.U),
+            getCurrentByte(_index, _way_index, (_word_offset << 2.U) | 1.U),
+            getCurrentByte(_index, _way_index, _word_offset << 2.U)))
+    }
+    def getCurrentBlock(_index : UInt, _way_index : UInt) : UInt = {
+        Cat((for(i <- 0 until blockSize) yield getCurrentWord(_index, _way_index, i.U)).reverse)
+    }
+
+    def getByte(_index : UInt, _way_index : UInt, _byte_offset : UInt) : UInt = {
+        r_blocks(((_index * wayCount.U + _way_index) << blockWidth.U) | _byte_offset)
     }
     def getWord(_index : UInt, _way_index : UInt, _word_offset : UInt) : UInt = {
         Cat(Seq(getByte(_index, _way_index, (_word_offset << 2.U) | 3.U), 
@@ -53,6 +66,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             getByte(_index, _way_index, _word_offset << 2.U)))
     }
     def getBlock(_index : UInt, _way_index : UInt) : UInt = {
+        assert(Cat((for(i <- 0 until blockSize) yield getWord(_index, _way_index, i.U)).reverse).getWidth == (8 << blockWidth))
         Cat((for(i <- 0 until blockSize) yield getWord(_index, _way_index, i.U)).reverse)
     }
 
@@ -60,7 +74,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         val _way_index = Wire(UInt(log2Up(wayCount).W))
         _way_index := 0.U
         for(i <- 0 until wayCount){
-            when(getTag(_index, i.U) === _tag){
+            when(isValid(_index, i.U) && getTag(_index, i.U) === _tag){
                 _way_index := i.U
             }
         }
@@ -83,6 +97,12 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         }
         vacant_way_index
     }
+
+    def getAddress(_index : UInt, _way_index : UInt) : UInt = {
+        Cat(Seq(getTag(_index, _way_index), _index, 0.U(blockWidth.W)))
+    }
+
+
 
 
     // -----------------------------
@@ -118,6 +138,8 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     prev_adr := adr
     prev_dat := dat
     prev_sel := sel
+
+    // printf(" --- %d, %d, %d, %d\n", cache_stalled, cache_prev_stalled, dat, prev_dat)
 
     // ----------------------------
 
@@ -204,18 +226,18 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         io.broadcaster.broadcast_type := _type
     }
 
-    printf("current_state = %d\n", state)
-    printf("valid = %d, %x, %x, %d, %d, %d, %d, %d, %d, %d\n", entry_valid, tag, getTag(index, way_index),
-        isDirty(index, way_index), index, way_index, bus_stalled, blockSize.U, op_counter, bus_in_dat)
-    printf("adr = %x\n", adr)
+    // printf("current_state = %d\n", state)
+    // printf("valid = %d, %x, %x, %d, %d, %d, %d, %d, %d, %d\n", entry_valid, tag, getTag(index, way_index),
+        // isDirty(index, way_index), index, way_index, bus_stalled, blockSize.U, op_counter, bus_in_dat)
+    // printf("adr = %x\n", adr)
 
     def writeEntry(_index : UInt, _way_index : UInt, _word_offset : UInt, _dat : UInt, _sel : UInt){
-        printf("Write Entry : %d, %d, %d, %d, %d\n", _index, _way_index, _word_offset, _dat, _sel)
+        // printf("Write Entry : %d, %d, %d, %d, %d\n", _index, _way_index, _word_offset, _dat, _sel)
         assert(_sel.getWidth == 4)
         assert(_dat.getWidth == 32)
         for(i <- 0 until 4){
             when(_sel(i)){
-                getByte(_index, _way_index, (_word_offset << 2.U) | i.U) := _dat(((i + 1) << 3) - 1, i << 3)
+                getCurrentByte(_index, _way_index, (_word_offset << 2.U) | i.U) := _dat(((i + 1) << 3) - 1, i << 3)
             }
         }
     }
@@ -260,12 +282,24 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     }
 
 
-    def finishFetch(_index : UInt, _way_index : UInt, _current : Boolean){
+    def finishFetch(_index : UInt, _way_index : UInt, _current : Boolean, _busy_now : Boolean){
         val _we = (if(_current) cur_we else we)
         fetched_index := _index
         fetched_way_index := _way_index
         when(_we){
-            modifyEntry(_index, _way_index, _current)
+            if(_busy_now){
+                cur_way_index := _way_index
+                if(!_current){
+                    // printf("asdfsf %x, %d, %d, %d\n", adr, dat, cache_prev_stalled, prev_dat)
+                    cur_adr := adr
+                    cur_dat := dat
+                    cur_sel := sel
+                    cur_we := we
+                }
+                state := STATE_MODIFY
+            } else{
+                modifyEntry(_index, _way_index, _current)
+            }
         }.otherwise{
             state := STATE_IDLE
             op_counter := 0.U
@@ -281,8 +315,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
 
     def commenceFetch(_index : UInt, _way_index : UInt, _current : Boolean) : Bool = {
         // broadcast the message that we would fetch the data
-                    
-        sendBroadcast(CacheCoherence.BR_FETCH, adr, 0.U, 0.U)
+        sendBroadcast(CacheCoherence.BR_FETCH, if(_current) cur_adr else adr, 0.U, 0.U)
         switch(io.broadcaster.response_type){
             is(CacheCoherence.RE_CLEAN_FOUND){
                 isDirty(_index, _way_index) := false.B
@@ -304,12 +337,13 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         when(io.broadcaster.response_type === CacheCoherence.RE_CLEAN_FOUND ||
             io.broadcaster.response_type === CacheCoherence.RE_DIRTY_FOUND){
             fillEntry(_index, _way_index, io.broadcaster.response_dat)
-            finishFetch(_index, _way_index, _current)
+            finishFetch(_index, _way_index, _current, true)
         }
 
         when(io.broadcaster.response_type =/= CacheCoherence.RE_STALL){
-            getTag(_index, _way_index) := (if(_current) cur_tag else tag)
             isValid(_index, _way_index) := true.B
+            getTag(_index, _way_index) := (if(_current) cur_tag else tag)
+            // printf("%d, %d, %d\n", _index, _way_index, (if(_current) cur_tag else tag))
         }
 
         io.broadcaster.response_type =/= CacheCoherence.RE_STALL
@@ -317,7 +351,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
 
 
     def commenceWriteBack(_index : UInt, _way_index : UInt) : Bool = {
-        sendBroadcast(CacheCoherence.BR_WRITE_BACK, adr, 0.U, 0.U)
+        sendBroadcast(CacheCoherence.BR_WRITE_BACK, getAddress(_index, _way_index), 0.U, 0.U)
         switch(io.broadcaster.response_type){
             is(CacheCoherence.RE_NO_MSG){
                 writeToBus(_index, _way_index, 0.U(blockWidth.W))
@@ -335,20 +369,39 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         assert(io.broadcaster.response_type =/= CacheCoherence.RE_CLEAN_FOUND &&
             io.broadcaster.response_type =/= CacheCoherence.RE_DIRTY_FOUND)
 
+        when(io.broadcaster.response_type =/= CacheCoherence.RE_STALL){
+            isValid(_index, _way_index) := false.B
+        }
+
+
         io.broadcaster.response_type =/= CacheCoherence.RE_STALL
     }
 
     def modifyEntry(_index : UInt, _way_index : UInt, _current : Boolean) : Bool = {
         if(_current){
-            sendBroadcast(CacheCoherence.BR_MODIFY, adr, cur_dat, cur_sel)
+            sendBroadcast(CacheCoherence.BR_MODIFY, cur_adr, cur_dat, cur_sel)
             when(io.broadcaster.response_type =/= CacheCoherence.RE_STALL){
-                writeEntry(_index, _way_index, cur_offset, cur_dat, cur_sel)
+                writeEntry(_index, _way_index, cur_offset >> 2.U, cur_dat, cur_sel)
                 isDirty(_index, _way_index) := true.B
                 state := STATE_IDLE
                 op_counter := 0.U
                 job_done := true.B
             }.otherwise{
                 state := STATE_MODIFY
+
+                cur_way_index := _way_index
+            }
+        } else{
+            sendBroadcast(CacheCoherence.BR_MODIFY, adr, dat, sel)
+            when(io.broadcaster.response_type =/= CacheCoherence.RE_STALL){
+                writeEntry(_index, _way_index, offset >> 2.U, dat, sel)
+                isDirty(_index, _way_index) := true.B
+                state := STATE_IDLE
+                op_counter := 0.U
+                job_done := true.B
+            }.otherwise{
+                state := STATE_MODIFY
+
                 cur_adr := adr
                 cur_dat := dat
                 cur_sel := sel
@@ -356,21 +409,10 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
 
                 cur_way_index := _way_index
             }
-        } else{
-            sendBroadcast(CacheCoherence.BR_MODIFY, adr, dat, sel)
-            when(io.broadcaster.response_type =/= CacheCoherence.RE_STALL){
-                writeEntry(_index, _way_index, offset, dat, sel)
-                isDirty(_index, _way_index) := true.B
-                state := STATE_IDLE
-                op_counter := 0.U
-                job_done := true.B
-            }.otherwise{
-                state := STATE_MODIFY
-                cur_way_index := _way_index
-            }
         }
 
-        assert(io.broadcaster.response_type === CacheCoherence.RE_NO_MSG)
+        assert(io.broadcaster.response_type === CacheCoherence.RE_NO_MSG ||
+            io.broadcaster.response_type === CacheCoherence.RE_STALL)
         io.broadcaster.response_type =/= CacheCoherence.RE_STALL
     }
 
@@ -390,7 +432,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             }.otherwise{
                 val vacant_way_index = getVacantWay(index)
                 when(!isValid(index, vacant_way_index) || !isDirty(index, next_victim)){
-                    printf("good %d %d %d %d!\n", index, vacant_way_index, next_victim, isDirty(index, next_victim))
+                    // printf("good %d %d %d %d!\n", index, vacant_way_index, next_victim, isDirty(index, next_victim))
                     val n_way_index = Mux(isValid(index, vacant_way_index), next_victim, vacant_way_index)
 
                     // happily, a vacant slot found
@@ -412,11 +454,15 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
             }
         }.elsewhen(we){
             modifyEntry(index, way_index, false)
+        }.otherwise{
+            fetched_index := index
+            fetched_way_index := way_index
+            job_done := true.B
         }
     }.elsewhen(state === STATE_FETCH){
         val next_counter = Mux(bus_stalled, op_counter, op_counter + 1.U)
 
-        printf("Fetch step %d, %d\n", op_counter, bus_in_dat)
+        // printf("Fetch step %d, %d\n", op_counter, bus_in_dat)
 
         when(bus_ack && op_counter > 0.U){
             writeEntry(cur_index, cur_way_index, op_counter - 1.U, bus_in_dat, 0xf.U(4.W))
@@ -427,7 +473,7 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
         }.otherwise{
             endBusTransaction()
             when(bus_ack){
-                finishFetch(cur_index, cur_way_index, true)
+                finishFetch(cur_index, cur_way_index, true, false)
             }
         }
     }.elsewhen(state === STATE_WRITE_BACK){
@@ -459,6 +505,8 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
 
     val i_have_something_to_do = io.broadcaster.broadcast_type =/= CacheCoherence.BR_NO_MSG
     val partner_has_something_to_do = io.snooper.broadcast_type =/= CacheCoherence.BR_NO_MSG
+    val i_have_urgency = io.broadcaster.broadcast_type === CacheCoherence.BR_MODIFY
+    val partner_has_urgency = io.snooper.broadcast_type === CacheCoherence.BR_MODIFY
 
     def inSameBlock(_adr1 : UInt, _adr2 : UInt) : Bool = {
         computeIndex(_adr1) === computeIndex(_adr2) && computeTag(_adr1) === computeTag(_adr2)
@@ -470,19 +518,26 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     }
 
     def tasksTransitionCollide : Bool = {
-        (state =/= STATE_IDLE && state =/= STATE_DIRECT_ACCESS) && partner_has_something_to_do && 
-            inSameBlock(io.broadcaster.broadcast_adr, io.snooper.broadcast_adr)
+        (state =/= STATE_IDLE && state =/= STATE_DIRECT_ACCESS) && !i_have_something_to_do &&
+            partner_has_something_to_do && 
+            inSameBlock(cur_adr, io.snooper.broadcast_adr)
+    }
+
+    def meFirst : Bool = {
+        (io.my_turn && i_have_urgency === partner_has_urgency) ||
+            (i_have_urgency && !partner_has_urgency)
     }
 
     val partner_stalled = Wire(Bool())
     partner_stalled := false.B
 
-    when((tasksCollide && io.my_turn) || 
-        (!i_have_something_to_do && tasksTransitionCollide)){
+    when((tasksCollide && meFirst) || tasksTransitionCollide){
         // in collision, if it is my turn, tell partner to wait
         sendResponse(CacheCoherence.RE_STALL)
         partner_stalled := true.B
     }
+
+    // printf("P %d, %d, %d\n", partner_stalled, partner_has_something_to_do, partner_entry_valid);
 
     when(!partner_stalled && partner_has_something_to_do && partner_entry_valid){
         // partner will do its job
@@ -507,19 +562,22 @@ class Cache(blockWidth : Int, wayCount : Int, indexWidth : Int, notToCache: Seq[
     }
 
 
-    io.bus.slave.ack_o := job_done || (state === STATE_IDLE && we && entry_valid)
+    io.bus.slave.ack_o := job_done
     io.bus.slave.err_o := false.B
     io.bus.slave.rty_o := false.B
     io.bus.slave.stall_o := false.B
     io.bus.slave.dat_o := Mux(state === STATE_IDLE,
-        Mux(entry_valid, getWord(index, way_index, offset >> 2.U), 
-            getWord(fetched_index, fetched_way_index, offset >> 2.U)),
-        getWord(fetched_index, fetched_way_index, cur_offset >> 2.U))
-    printf("D GET %d, %d, %d, %d, %d, %d\n", index, way_index, offset >> 2.U, offset, adr(indexStart - 1, 0), adr(indexStart - 1, 0) & ~3.U)
+        Mux(entry_valid, getCurrentWord(index, way_index, offset >> 2.U), 
+            getCurrentWord(fetched_index, fetched_way_index, offset >> 2.U)),
+        Mux(state === STATE_DIRECT_ACCESS, bus_in_dat,
+        getCurrentWord(fetched_index, fetched_way_index, cur_offset >> 2.U)))
+    // printf("D GET %d, %d, %d, %d, %d, %d\n", index, way_index, offset >> 2.U, offset, adr(indexStart - 1, 0), adr(indexStart - 1, 0) & ~3.U)
 
     for(i <- 0 until (wayCount * (1 << (indexWidth + blockWidth)))){
         r_blocks(i) := c_blocks(i)
     }
+
+    // printf("cur_adr = %x, cur_dat = %d\n", cur_adr, cur_dat)
 
     io.bus.master.cyc_i := cyc_o
     io.bus.master.stb_i := cyc_o

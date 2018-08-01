@@ -4,7 +4,7 @@ import chisel3._
 import chisel3.util._
 import systemoncat.sysbus._
 import systemoncat.mmu._
-import systemoncat.cache.Cache
+import systemoncat.cache.{Cache, CacheCoherence}
 import systemoncat.devices.ROM
 import systemoncat.devices.PLICInterface
 
@@ -33,7 +33,16 @@ class Core(not_to_cache : Seq[(BitPat, Bool)]) extends Module {
 
     val bus_conn = Module(new SysBusConnector())
     val mmu = Module(new MMUWrapper())
-    val cache = Module(new Cache(3, 2, 4, not_to_cache))
+    val cache = Module(new Cache(3, 2, 2, not_to_cache))
+
+    cache.io.snooper.broadcast_adr := 0.U
+    cache.io.snooper.broadcast_dat := 0.U
+    cache.io.snooper.broadcast_sel := 0.U
+    cache.io.snooper.broadcast_type := CacheCoherence.BR_NO_MSG
+    cache.io.broadcaster.response_type := CacheCoherence.RE_NO_MSG
+    cache.io.broadcaster.response_dat := 0.U
+    cache.io.my_turn := false.B
+
 
     mmu.io.csr_info <> dpath.io.mmu_csr_info
     mmu.io.expt <> dpath.io.mmu_expt
