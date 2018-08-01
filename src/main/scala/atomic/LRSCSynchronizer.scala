@@ -21,6 +21,7 @@ class LRSCSynchronizerCoreIO extends Bundle {
     val sc_en = Input(Bool())
     val lr_en = Input(Bool())
     val modify_en = Input(Bool())
+    val in_amo = Input(Bool())
     val addr = Input(UInt(32.W))
     val sc_valid = Output(Bool()) // if this Store Conditional is allowed
 }
@@ -61,14 +62,15 @@ class LRSCSynchronizer extends Module {
 
         reservation_broke(i) := core(i).modify_en && core(i).addr === lr_reserved_addr(i)
         lr_valid_counter(i) := Mux(reservation_broke(i), 0.U,
-            Mux(core(i).lr_en, Mux((core(i).addr === core(NCPUs-1-i).addr) && core(NCPUs-1-i).modify_en, 0.U, 1.U), 
+            Mux(core(i).lr_en, Mux(((core(i).addr === core(NCPUs-1-i).addr) && core(NCPUs-1-i).modify_en) || core(NCPUs-1-i).in_amo, 0.U, 1.U), 
                 // if core 0 LR & core 1 STORE happens at the same time, core 0 LR is invalid
             Mux(core(NCPUs-1-i).modify_en && core(NCPUs-1-i).addr === lr_reserved_addr(i), 0.U,
             Mux(lr_valid_counter(i) === LoadReservationCycles, 0.U,
-            Mux(lr_valid_counter(i) === 0.U, 0.U, lr_valid_counter(1) + 1.U)))))
+            Mux(lr_valid_counter(i) === 0.U, 0.U, 
+            Mux(core(NCPUs-1-i).in_amo, 0.U, lr_valid_counter(i) + 1.U))))))
 
         core(i).sc_valid := Mux(sc_conflict, i.U === 0.U,
-            core(i).sc_en && lr_valid(i) && lr_reserved_addr(i) === core(i).addr &&
+            core(i).sc_en && lr_valid(i) && lr_reserved_addr(i) === core(i).addr && (!core(NCPUs-1-i).in_amo)
             !(core(NCPUs-1-i).modify_en && core(NCPUs-1-i).addr === lr_reserved_addr(i)))
             // When a store and a SC happens at the same time, as we don't know which one will execute first, 
             // we assume that SC fails.

@@ -45,12 +45,14 @@ import AtomicConsts._
 
 class DMem extends Module {
     val io = IO(new DMemIO)
+    val amo_locked = Wire(Bool())
 
     // -------- LR & SC --------
     io.lrsc_syn.lr_en := io.core.req.lr_en
     io.lrsc_syn.sc_en := io.core.req.sc_en
     io.lrsc_syn.addr := io.core.req.addr
     io.lrsc_syn.modify_en := io.core.req.wr_en || io.core.req.amo_en || io.core.req.sc_en
+    io.lrsc_syn.in_amo := amo_locked
     val sc_valid = io.lrsc_syn.sc_valid
     // reservation hasn't been broken, store conditional succeed
 
@@ -69,9 +71,10 @@ class DMem extends Module {
     val prev_addr_err = RegInit(false.B)
     val prev_amo_en = RegInit(false.B)
     val prev_amo_op = RegInit(AMO_OP.AMO_X)
+    val prev_dmem_pending = RegInit(false.B)
 
-    val amo_locked = Wire(Bool())
-    val cur_locked = io.bus.res.locked || amo_locked
+    val dmem_pending = io.amo_syn.pending
+    val cur_locked = io.bus.res.locked || amo_locked || (prev_dmem_pending && prev_en)
     when (!cur_locked) {
         prev_wr_data := io.core.req.wr_data
         prev_addr := io.core.req.addr
@@ -84,6 +87,7 @@ class DMem extends Module {
         prev_amo_en := io.core.req.amo_en
         prev_amo_op := io.core.req.amo_op
     }
+    prev_dmem_pending := dmem_pending
 
     val cur_wr_data = Mux(cur_locked, prev_wr_data, io.core.req.wr_data)
     val cur_addr = Mux(cur_locked, prev_addr, io.core.req.addr)
@@ -153,8 +157,8 @@ class DMem extends Module {
 
     when (!cur_amo_en) {
         io.bus.req.sel := mask
-        io.bus.req.wen := cur_wr_en && (!addr_err)
-        io.bus.req.ren := cur_rd_en && (!addr_err)
+        io.bus.req.wen := cur_wr_en && (!addr_err) && (!dmem_pending)
+        io.bus.req.ren := cur_rd_en && (!addr_err) && (!dmem_pending)
         io.bus.req.en := cur_en && (!addr_err)
         io.bus.req.addr := cur_addr
         io.bus.req.data_wr := wr_data
@@ -182,9 +186,20 @@ class DMem extends Module {
         MEM_HU -> Cat(Fill(16, 0.U(1.W)), hword_data(15, 0))
     ))
 
+    val prev_read_data = RegInit(UInt(32.W), 0.U)
+    val prev_locked = RegInit(Bool(), false.B)
+    prev_locked := io.core.res.locked
+
+    val cur_read_data = Mux(prev_sc_en, Mux(prev_sc_valid, 0.U(32.W), 1.U(32.W)),
+        Mux(prev_rd_en, ext_data, 0.U(32.W)))
+
+    when (!io.core.res.locked && prev_locked) {
+        prev_read_data := cur_read_data
+    }
+    val read_data = Mux(prev_locked, cur_read_data, prev_read_data)
+
     when (!prev_amo_en) {
-        io.core.res.rd_data := Mux(prev_sc_en, Mux(prev_sc_valid, 0.U(32.W), 1.U(32.W)),
-            Mux(prev_rd_en, ext_data, 0.U(32.W)))
+        io.core.res.rd_data := read_data
     }
     .otherwise {
         io.core.res.rd_data := amo.io.res.data
