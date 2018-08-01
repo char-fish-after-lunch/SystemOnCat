@@ -202,10 +202,10 @@ class DMem extends Module {
     val cur_read_data = Mux(prev_sc_en, Mux(prev_sc_valid, 0.U(32.W), 1.U(32.W)),
         Mux(prev_rd_en, ext_data, 0.U(32.W)))
 
-    when (!io.core.res.locked && prev_locked) {
+    when ((!io.core.res.locked && prev_locked) || cur_sc_en) {
         prev_read_data := cur_read_data
     }
-    val read_data = Mux(prev_locked, cur_read_data, prev_read_data)
+    val read_data = Mux(prev_locked || prev_sc_en, cur_read_data, prev_read_data)
 
     when (!prev_amo_en) {
         io.core.res.rd_data := read_data

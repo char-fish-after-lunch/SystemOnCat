@@ -1,4 +1,4 @@
-prog= lr_sc amo_ops
+prog= lr_sc amo_ops spinlock
 
 ifndef MARCH
 MARCH:=rv32ia
