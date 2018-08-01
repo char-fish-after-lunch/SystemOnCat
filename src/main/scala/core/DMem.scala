@@ -2,6 +2,7 @@ package systemoncat.core
 
 import chisel3._
 import chisel3.util._
+import systemoncat.atomic._
 
 class DMemRequest extends Bundle {
     val addr = Input(UInt(32.W))
@@ -36,14 +37,8 @@ class DMemCoreIO extends Bundle {
 class DMemIO extends Bundle {
     val core = new DMemCoreIO
     val bus = Flipped(new SysBusBundle)
-}
-
-object AtomicConsts {
-    def LoadReservationCycles = 126.U(7.W) 
-    // The static code for the LR/SC sequence plus the code to retry the sequence in case
-    // of failure must comprise at most 16 integer instructions placed sequentially in memory. -- riscv-spec-v2.2, p41
-    // However, TLB refill & cache refill costs taken into consideration, a much larger limit is needed.
-
+    val lrsc_syn = Flipped(new LRSCSynchronizerCoreIO)
+    val amo_syn = Flipped(new AMOSynchronizerCoreIO)
 }
 
 import AtomicConsts._
@@ -52,25 +47,12 @@ class DMem extends Module {
     val io = IO(new DMemIO)
 
     // -------- LR & SC --------
-    val lr_valid_counter = RegInit(UInt(), 0.U(LoadReservationCycles.getWidth.W))
-    // lr_valid_counter == 0: no addr is reserved
-    // else: a LR has been waiting for x cycles
-    // when reserved addr is writen, this is reset to 0.
-
-    val lr_valid = (lr_valid_counter =/= 0.U)
-    val lr_reserved_addr = RegInit(UInt(), 0.U(32.W))
-
-    when (io.core.req.lr_en) {
-        lr_reserved_addr := io.core.req.addr
-    }
-
-    lr_valid_counter := Mux(io.core.req.wr_en && io.core.req.addr === lr_reserved_addr, 0.U,
-        Mux(io.core.req.lr_en, 1.U,
-        Mux(lr_valid_counter === LoadReservationCycles, 0.U,
-        Mux(lr_valid_counter === 0.U, 0.U, lr_valid_counter + 1.U))))
-
-    val sc_valid = io.core.req.sc_en && lr_valid && lr_reserved_addr === io.core.req.addr
-    // reservation is valid, store conditional succeeded
+    io.lrsc_syn.lr_en := io.core.req.lr_en
+    io.lrsc_syn.sc_en := io.core.req.sc_en
+    io.lrsc_syn.addr := io.core.req.addr
+    io.lrsc_syn.modify_en := io.core.req.wr_en || io.core.req.amo_en || io.core.req.sc_en
+    val sc_valid = io.lrsc_syn.sc_valid
+    // reservation hasn't been broken, store conditional succeed
 
     // -------- Sysbus --------
     val en = io.core.req.sc_en || io.core.req.rd_en || io.core.req.wr_en
@@ -165,9 +147,9 @@ class DMem extends Module {
     amo.io.req.rs2_data := cur_wr_data
     amo.io.req.amo_op := cur_amo_op
     amo.io.bus.res := io.bus.res
+    amo.io.syn <> io.amo_syn
 
     amo_locked := amo.io.res.locked
-    // TODO: link AMO module into DMem
 
     when (!cur_amo_en) {
         io.bus.req.sel := mask

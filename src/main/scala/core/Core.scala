@@ -7,14 +7,23 @@ import systemoncat.mmu._
 import systemoncat.cache.{Cache, CacheCoherence}
 import systemoncat.devices.ROM
 import systemoncat.devices.PLICInterface
+import systemoncat.atomic._
 
-class DebugDevicesIO() extends Bundle {
-    // unimportant devices, e.g: leds, buttons
+class DebugDevicesInput() extends Bundle {
     val touch_btn = Input(Bits(4.W))
     val dip_sw = Input(UInt(32.W))
+}
+
+class DebugDevicesOutput() extends Bundle {
     val leds = Output(UInt(16.W))
     val dpy0 = Output(Bits(8.W))
     val dpy1 = Output(Bits(8.W))
+}
+
+class DebugDevicesIO() extends Bundle {
+    // unimportant devices, e.g: leds, buttons
+    val in_devs = new DebugDevicesInput
+    val out_devs = new DebugDevicesOutput
 }
 
 class CoreIO() extends Bundle {
@@ -22,18 +31,22 @@ class CoreIO() extends Bundle {
     val ext_irq_r = Input(Bool())
     val irq_client = Flipped(new ClientIrqIO)
     val bus_request = Flipped(new SysBusSlaveBundle)
+    val lrsc_syn = Flipped(new LRSCSynchronizerCoreIO)
+    val amo_syn = Flipped(new AMOSynchronizerCoreIO)
+    val cache_turn = Input(Bool())
+    val cache_response = Output(UInt(3.W))
 }
 
-class Core(not_to_cache : Seq[(BitPat, Bool)]) extends Module {
+class Core(CoreID: Int, not_to_cache: Seq[(BitPat, Bool)]) extends Module {
     val io = IO(new CoreIO)
-    val dpath = Module(new Datapath) 
+    val dpath = Module(new Datapath(CoreID)) 
     val ctrl  = Module(new Control)
     val ifetch = Module(new IFetch)
     val dmem = Module(new DMem)
 
     val bus_conn = Module(new SysBusConnector())
     val mmu = Module(new MMUWrapper())
-    val cache = Module(new Cache(3, 2, 2, not_to_cache))
+    val cache = Module(new Cache(2, 1, 1, not_to_cache))
 
     cache.io.snooper.broadcast_adr := 0.U
     cache.io.snooper.broadcast_dat := 0.U
@@ -41,7 +54,8 @@ class Core(not_to_cache : Seq[(BitPat, Bool)]) extends Module {
     cache.io.snooper.broadcast_type := CacheCoherence.BR_NO_MSG
     cache.io.broadcaster.response_type := CacheCoherence.RE_NO_MSG
     cache.io.broadcaster.response_dat := 0.U
-    cache.io.my_turn := false.B
+    cache.io.my_turn := io.cache_turn
+    io.cache_response := cache.io.snooper.response_type
 
 
     mmu.io.csr_info <> dpath.io.mmu_csr_info
@@ -58,6 +72,8 @@ class Core(not_to_cache : Seq[(BitPat, Bool)]) extends Module {
     ifetch.io.bus <> bus_conn.io.imem
     ifetch.io.pending <> bus_conn.io.imem_pending
     dmem.io.bus <> bus_conn.io.dmem
+    dmem.io.lrsc_syn <> io.lrsc_syn
+    dmem.io.amo_syn <> io.amo_syn
 
     io.ext_irq_r <> dpath.io.ext_irq_r
 

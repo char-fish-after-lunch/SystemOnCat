@@ -6,6 +6,7 @@ import chisel3.Bits._
 import systemoncat.mmu.MemoryConsts._
 
 object CSRConsts {
+  def MHARTID  = "hf14".U(12.W)
   def MSTATUS  = "h300".U(12.W)
   def MIE      = "h304".U(12.W)
   def MIP      = "h344".U(12.W)
@@ -227,7 +228,7 @@ class CSRFileIO() extends Bundle{
     val priv = Output(UInt(2.W))
 }
 
-class CSRFile() extends Module{
+class CSRFile(CoreID: Int) extends Module{
   val io = IO(new CSRFileIO)
 
   val prv = RegInit(PRV.M)
@@ -236,7 +237,7 @@ class CSRFile() extends Module{
   val reset_mstatus = 0.U(32.W).asTypeOf(new MStatus())
   reset_mstatus.mpp := PRV.M
   val mstatus = RegInit(reset_mstatus) // 0x300
-//val mhartid = Reg(UInt(32.W))  // 0xF14
+  val mhartid = RegInit(CoreID.U(32.W)) // 0xF14
   
   // Interrupt Enable
   val mie = RegInit(0.U(32.W).asTypeOf(new MIE))      // 0x304
@@ -270,6 +271,7 @@ class CSRFile() extends Module{
   io.read_csr_dat := 0.U(32.W)
   when(io.csr_ena & io.csr_rd_en){
     io.read_csr_dat := MuxLookup(io.csr_idx, 0.U(32.W), Seq(
+        CSRConsts.MHARTID  -> mhartid,
         CSRConsts.MSTATUS  -> mstatus.asUInt(),
         CSRConsts.MIE      -> mie.asUInt(),
         CSRConsts.MIP      -> mip.asUInt(),
